@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -226,7 +227,7 @@ abstract class WPMangaStream(
     }
 
     fun parseChapterDate(date: String): Long {
-        return if (date.contains("ago")) {
+        return if (date.endsWith("ago")) {
             val value = date.split(' ')[0].toInt()
             when {
                 "min" in date -> Calendar.getInstance().apply {
@@ -284,9 +285,11 @@ abstract class WPMangaStream(
         val imageListJson = imageListRegex.find(docString)!!.destructured.toList()[0]
 
         val imageList = json.parseToJsonElement(imageListJson).jsonArray
+        val baseResolver = baseUrl.toHttpUrl()
 
         val scriptPages = imageList.mapIndexed { i, jsonEl ->
-            Page(i, "", jsonEl.jsonPrimitive.content)
+            val imageUrl = jsonEl.jsonPrimitive.content
+            Page(i, "", baseResolver.resolve(imageUrl).toString())
         }
 
         if (htmlPages.size < scriptPages.size) {

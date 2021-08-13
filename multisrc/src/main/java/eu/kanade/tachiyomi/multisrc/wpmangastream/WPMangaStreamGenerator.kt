@@ -9,7 +9,7 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
 
     override val themeClass = "WPMangaStream"
 
-    override val baseVersionCode: Int = 7
+    override val baseVersionCode: Int = 9
 
     override val sources = listOf(
             SingleLang("Asura Scans", "https://www.asurascans.com", "en", overrideVersionCode = 5),
@@ -36,7 +36,6 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
             SingleLang("Manga Raw.org", "https://mangaraw.org", "ja", className = "MangaRawOrg", overrideVersionCode = 1),
             SingleLang("Manga Pro Z", "https://mangaproz.com", "ar"),
             SingleLang("Mihentai", "https://mihentai.com", "en", isNsfw = true),
-            SingleLang("Silence Scan", "https://silencescan.net", "pt-BR", overrideVersionCode = 3),
             SingleLang("Kuma Scans (Kuma Translation)", "https://kumascans.com", "en", className = "KumaScans", overrideVersionCode = 1),
             SingleLang("Tempest Manga", "https://manga.tempestfansub.com", "tr"),
             SingleLang("xCaliBR Scans", "https://xcalibrscans.com", "en", overrideVersionCode = 2),
@@ -46,7 +45,7 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
             SingleLang("Sekte Doujin", "https://sektedoujin.xyz", "id", isNsfw = true, overrideVersionCode = 2),
             SingleLang("Lemon Juice Scan", "https://lemonjuicescan.com", "pt-BR", isNsfw = true, overrideVersionCode = 1),
             SingleLang("Phoenix Fansub", "https://phoenixfansub.com", "es"),
-            SingleLang("Geass Scanlator", "https://geassscan.xyz", "pt-BR", overrideVersionCode = 1)
+            SingleLang("Geass Scanlator", "https://geassscan.xyz", "pt-BR", overrideVersionCode = 2)
     )
 
     companion object {
