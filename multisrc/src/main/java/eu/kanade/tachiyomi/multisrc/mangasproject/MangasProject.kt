@@ -46,7 +46,6 @@ abstract class MangasProject(
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", baseUrl)
-        .add("User-Agent", USER_AGENT)
 
     // Use internal headers to allow "Open in WebView" to work.
     private fun sourceHeadersBuilder(): Headers.Builder = headersBuilder()
@@ -56,6 +55,8 @@ abstract class MangasProject(
     protected val sourceHeaders: Headers by lazy { sourceHeadersBuilder().build() }
 
     private val json: Json by injectLazy()
+
+    protected open val licensedCheck: Boolean = false
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/home/most_read?page=$page&type=", sourceHeaders)
@@ -137,7 +138,7 @@ abstract class MangasProject(
         val isCompleted = seriesData.select("span.series-author i.complete-series").first() != null
 
         // Check if the manga was removed by the publisher.
-        val seriesBlocked = document.select("div.series-blocked-img").first()
+        val seriesBlocked = document.select("div.series-blocked-img:has(img[src$=blocked.svg])").first()
 
         val seriesAuthors = document.select("div#series-data span.series-author").text()
             .substringAfter("Completo")
@@ -167,7 +168,7 @@ abstract class MangasProject(
     }
 
     private fun parseStatus(seriesBlocked: Element?, isCompleted: Boolean) = when {
-        seriesBlocked != null -> SManga.LICENSED
+        seriesBlocked != null && licensedCheck -> SManga.LICENSED
         isCompleted -> SManga.COMPLETED
         else -> SManga.ONGOING
     }
@@ -189,9 +190,9 @@ abstract class MangasProject(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val licensedMessage = document.select("div.series-blocked-img").firstOrNull()
+        val licensedMessage = document.select("div.series-blocked-img:has(img[src$=blocked.svg])").firstOrNull()
 
-        if (licensedMessage != null) {
+        if (licensedMessage != null && licensedCheck) {
             // If the manga is licensed and has been removed from the source,
             // the extension will not fetch the chapters, even if they are returned
             // by the API. This is just to mimic the website behavior.
