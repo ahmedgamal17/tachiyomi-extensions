@@ -116,6 +116,8 @@ class TeamX : ParsedHttpSource() {
                 description = info.select("p").text()
             }
 
+            thumbnail_url = document.select("div.thumb > img").attr("src")
+
             author = document.select("div.container > div:nth-child(1) > div:nth-child(2) > div:nth-child(6) > a").firstOrNull()?.ownText()
             artist = author
 
