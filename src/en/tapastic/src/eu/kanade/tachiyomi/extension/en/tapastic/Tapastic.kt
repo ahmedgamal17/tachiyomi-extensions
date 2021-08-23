@@ -2,14 +2,9 @@ package eu.kanade.tachiyomi.extension.en.tapastic
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.net.Uri
-import com.github.salomonbrys.kotson.bool
-import com.github.salomonbrys.kotson.fromJson
-import com.github.salomonbrys.kotson.get
-import com.github.salomonbrys.kotson.int
-import com.github.salomonbrys.kotson.string
-import com.google.gson.Gson
-import com.google.gson.JsonObject
+import android.webkit.CookieManager
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -19,7 +14,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -27,75 +32,107 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
-    // Preferences Code
+    // Originally Tapastic
+    override val id = 3825434541981130345
+
+    override val name = "Tapas"
+
+    override val lang = "en"
+
+    override val baseUrl = "https://tapas.io"
+
+    override val supportsLatest = true
+
+    private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
+
+    override val client: OkHttpClient = super.client.newBuilder()
+        .cookieJar(
+            // Syncs okhttp with webview cookies, allowing logged-in users do logged-in stuff
+            object : CookieJar {
+                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                    for (cookie in cookies) {
+                        webViewCookieManager.setCookie(url.toString(), cookie.toString())
+                    }
+                }
+                override fun loadForRequest(url: HttpUrl): MutableList<Cookie> {
+                    val cookiesString = webViewCookieManager.getCookie(url.toString())
+
+                    if (cookiesString != null && cookiesString.isNotEmpty()) {
+                        val cookieHeaders = cookiesString.split("; ").toList()
+                        val cookies = mutableListOf<Cookie>()
+                        for (header in cookieHeaders) {
+                            cookies.add(Cookie.parse(url, header)!!)
+                        }
+                        // Adds age verification cookies to access mature comics
+                        return cookies.apply {
+                            add(
+                                Cookie.Builder()
+                                    .domain("tapas.io")
+                                    .path("/")
+                                    .name("birthDate")
+                                    .value("1994-01-01")
+                                    .build()
+                            )
+                            add(
+                                Cookie.Builder()
+                                    .domain("tapas.io")
+                                    .path("/")
+                                    .name("adjustedBirthDate")
+                                    .value("1994-01-01")
+                                    .build()
+                            )
+                        }
+                    } else {
+                        return mutableListOf()
+                    }
+                }
+            }
+        )
+        .build()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val chapterListPref = androidx.preference.ListPreference(screen.context).apply {
-            key = SHOW_LOCKED_CHAPTERS_Title
-            title = SHOW_LOCKED_CHAPTERS_Title
-            entries = prefsEntriesChapters
-            entryValues = prefsEntryValuesChapters
-            summary = "%s"
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("Referer", "https://m.tapas.io")
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val chapterVisibilityPref = SwitchPreferenceCompat(screen.context).apply {
+            key = CHAPTER_VIS_PREF_KEY
+            title = "Show paywalled chapters"
+            summary = "Tapas requires login/payment for some chapters. Enable to always show paywalled chapters."
+            setDefaultValue(true)
 
             setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(SHOW_LOCKED_CHAPTERS, entry).commit()
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean(CHAPTER_VIS_PREF_KEY, checkValue).commit()
             }
         }
-        screen.addPreference(chapterListPref)
+        screen.addPreference(chapterVisibilityPref)
 
-        val lockPref = androidx.preference.ListPreference(screen.context).apply {
-            key = SHOW_LOCK_Title
-            title = SHOW_LOCK_Title
-            entries = prefsEntriesLock
-            entryValues = prefsEntryValuesLock
-            summary = "%s"
+        val lockPref = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_LOCK_PREF_KEY
+            title = "Show lock icon"
+            summary = "Enable to continue showing \uD83D\uDD12 for locked chapters after login."
+            setDefaultValue(false)
 
             setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(SHOW_LOCK, entry).commit()
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean(SHOW_LOCK_PREF_KEY, checkValue).commit()
             }
         }
         screen.addPreference(lockPref)
     }
 
-    private fun chapterListPref() = preferences.getString(SHOW_LOCKED_CHAPTERS, "free")
-    private fun lockPref() = preferences.getString(SHOW_LOCK, "yes")
-
-    companion object {
-        private const val SHOW_LOCKED_CHAPTERS_Title = "Tapas requires login/payment for some chapters"
-        private const val SHOW_LOCKED_CHAPTERS = "tapas_locked_chapters"
-        private val prefsEntriesChapters = arrayOf("Show all chapters (including pay-to-read)", "Only show free chapters")
-        private val prefsEntryValuesChapters = arrayOf("all", "free")
-
-        private const val SHOW_LOCK_Title = "Show \uD83D\uDD12 for locked chapters after login"
-        private const val SHOW_LOCK = "tapas_lock"
-        private val prefsEntriesLock = arrayOf("Yes", "No")
-        private val prefsEntryValuesLock = arrayOf("yes", "no")
-    }
-
-    // Info
-    override val lang = "en"
-    override val supportsLatest = true
-    override val name = "Tapas" // originally Tapastic
-    override val baseUrl = "https://tapas.io"
-    override val id = 3825434541981130345
-
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", "https://m.tapas.io")
+    private fun showLockedChapterPref() = preferences.getBoolean(CHAPTER_VIS_PREF_KEY, false)
+    private fun showLockPref() = preferences.getBoolean(SHOW_LOCK_PREF_KEY, false)
 
     // Popular
 
@@ -123,24 +160,40 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // If there is any search text, use text search, otherwise use filter search
-        val uri = if (query.isNotBlank()) {
-            Uri.parse("$baseUrl/search")
-                .buildUpon()
-                .appendQueryParameter("t", "COMICS")
-                .appendQueryParameter("q", query)
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val url: HttpUrl.Builder
+        // If there is any search text, use text search, ignoring filters
+        if (query.isNotBlank()) {
+            url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("t", "COMICS")
         } else {
-            val uri = Uri.parse("$baseUrl/comics").buildUpon()
-            // Append uri filters
-            filters.forEach {
-                if (it is UriFilter)
-                    it.addToUri(uri)
+            // Checking mature filter
+            val matureFilter = filterList.find { it is MatureFilter } as MatureFilter
+            if (matureFilter.state) {
+                url = "$baseUrl/mature".toHttpUrlOrNull()!!.newBuilder()
+                // Append only mature uri filters
+                filterList.forEach {
+                    if (it is UriFilter && it.isMature)
+                        it.addToUri(url)
+                }
+            } else {
+                url = "$baseUrl/comics".toHttpUrlOrNull()!!.newBuilder()
+                // Append only non-mature uri filters
+                filterList.forEach {
+                    if (it is UriFilter && !it.isMature)
+                        it.addToUri(url)
+                }
             }
-            uri
+        }
+        // Append sort if category = ALL
+        if (url.toString().contains("b=ALL")) {
+            val sortFilter = filterList.find { it is SortFilter } as SortFilter
+            sortFilter.addToUri(url)
         }
         // Append page number
-        uri.appendQueryParameter("pageNumber", page.toString())
-        return GET(uri.toString())
+        url.addQueryParameter("pageNumber", page.toString())
+        return GET(url.toString())
     }
 
     override fun searchMangaNextPageSelector() =
@@ -156,7 +209,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + "${manga.url}/info")
+        return GET(baseUrl + "${manga.url}/info", headers)
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -174,10 +227,10 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
      * Checklist: Paginated chapter lists, locked chapters, future chapters, early-access chapters (app only?), chapter order
      */
 
-    private val gson by lazy { Gson() }
+    private val json: Json by injectLazy()
 
     private fun Element.isLockedChapter(): Boolean {
-        return this.hasClass("js-have-to-sign") || (lockPref() == "yes" && this.hasClass("js-locked"))
+        return this.hasClass("js-have-to-sign") || (showLockPref() && this.hasClass("js-locked"))
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -188,16 +241,19 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         // recursively build the chapter list
         fun parseChapters(page: Int) {
             val url = "$baseUrl/series/$mangaId/episodes?page=$page&sort=NEWEST&init_load=0&large=true&last_access=0&"
-            val json = gson.fromJson<JsonObject>(client.newCall(GET(url, headers)).execute().body!!.string())["data"]
+            val jsonResponse = client.newCall(GET(url, headers)).execute()
+            val json = json.parseToJsonElement(jsonResponse.body!!.string()).jsonObject["data"]!!.jsonObject
 
-            Jsoup.parse(json["body"].string).select(chapterListSelector())
+            Jsoup.parse(json["body"]!!.jsonPrimitive.content).select(chapterListSelector())
                 .let { list ->
                     // show/don't show locked chapters based on user's preferences
-                    if (chapterListPref() == "free") list.filterNot { it.isLockedChapter() } else list
+                    if (showLockedChapterPref()) list else list.filterNot { it.isLockedChapter() }
                 }
                 .map { chapters.add(chapterFromElement(it)) }
 
-            if (json["pagination"]["has_next"].bool) parseChapters(json["pagination"]["page"].int)
+            val hasNextPage = json["pagination"]!!.jsonObject["has_next"]!!.jsonPrimitive.boolean
+            val nextPage = json["pagination"]!!.jsonObject["page"]!!.jsonPrimitive.int
+            if (hasNextPage) parseChapters(nextPage)
         }
 
         parseChapters(1)
@@ -236,33 +292,39 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     override fun getFilterList() = FilterList(
         // Tapastic does not support genre filtering and text search at the same time
-        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Header("NOTE: All filters ignored if using text search!"),
         Filter.Separator(),
-        FilterFilter(),
+        Filter.Header("Sort: Only applied when category is All"),
+        SortFilter(),
+        Filter.Separator(),
+        CategoryFilter(),
         GenreFilter(),
         StatusFilter(),
         Filter.Separator(),
-        Filter.Header("Sort is ignored when filter is active!"),
-        SortFilter()
+        Filter.Header("Mature filters"),
+        MatureFilter("Show Mature Results Only"),
+        MatureCategoryFilter(),
+        MatureGenreFilter()
     )
 
-    private class FilterFilter : UriSelectFilter(
-        "Filter",
+    private class CategoryFilter : UriSelectFilter(
+        "Category",
+        false,
         "b",
         arrayOf(
-            Pair("ALL", "None"),
+            Pair("ALL", "All"),
             Pair("POPULAR", "Popular"),
             Pair("TRENDING", "Trending"),
             Pair("FRESH", "Fresh"),
             Pair("BINGE", "Binge"),
             Pair("ORIGINAL", "Tapas Originals")
         ),
-        firstIsUnspecified = false,
         defaultValue = 1
     )
 
     private class GenreFilter : UriSelectFilter(
         "Genre",
+        false,
         "g",
         arrayOf(
             Pair("0", "Any"),
@@ -284,6 +346,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     private class StatusFilter : UriSelectFilter(
         "Status",
+        false,
         "f",
         arrayOf(
             Pair("NONE", "All"),
@@ -292,15 +355,48 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         )
     )
 
-    private class SortFilter : UriSelectFilter(
-        "Sort",
-        "s",
+    private class MatureFilter(name: String) : Filter.CheckBox(name)
+
+    private class MatureCategoryFilter : UriSelectFilter(
+        "Category",
+        true,
+        "b",
         arrayOf(
+            Pair("ALL", "All"),
+            Pair("POPULAR", "Popular"),
+            Pair("FRESH", "Fresh"),
+        ),
+        defaultValue = 1
+    )
+
+    private class MatureGenreFilter : UriSelectFilter(
+        "Genre",
+        true,
+        "g",
+        arrayOf(
+            Pair("0", "Any"),
+            Pair("5", "Romance"),
+            Pair("8", "Drama"),
+            Pair("22", "Boys Love"),
+            Pair("24", "Girls Love"),
+            Pair("2", "Comedy"),
+            Pair("6", "Horror"),
+        )
+    )
+
+    private class SortFilter(
+        name: String = "Sort by",
+        var vals: Array<Pair<String, String>> = arrayOf(
             Pair("DATE", "Date"),
             Pair("LIKE", "Likes"),
             Pair("SUBSCRIBE", "Subscribers")
-        )
-    )
+        ),
+        defaultValue: Int = 0
+    ) : Filter.Select<String>(name, vals.map { it.second }.toTypedArray(), defaultValue) {
+        fun addToUri(uri: HttpUrl.Builder) {
+            uri.addQueryParameter("s", vals[state].first)
+        }
+    }
 
     /**
      * Class that creates a select filter. Each entry in the dropdown has a name and a display name.
@@ -310,16 +406,17 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
     // vals: <name, display>
     private open class UriSelectFilter(
         displayName: String,
+        override val isMature: Boolean,
         val uriParam: String,
         val vals: Array<Pair<String, String>>,
-        val firstIsUnspecified: Boolean = true,
+        val firstIsUnspecified: Boolean = false,
         defaultValue: Int = 0
     ) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
         UriFilter {
-        override fun addToUri(uri: Uri.Builder) {
+        override fun addToUri(uri: HttpUrl.Builder) {
             if (state != 0 || !firstIsUnspecified)
-                uri.appendQueryParameter(uriParam, vals[state].first)
+                uri.addQueryParameter(uriParam, vals[state].first)
         }
     }
 
@@ -327,6 +424,12 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
      * Represents a filter that is able to modify a URI.
      */
     private interface UriFilter {
-        fun addToUri(uri: Uri.Builder)
+        val isMature: Boolean
+        fun addToUri(uri: HttpUrl.Builder)
+    }
+
+    companion object {
+        private const val CHAPTER_VIS_PREF_KEY = "lockedChapterVisibility"
+        private const val SHOW_LOCK_PREF_KEY = "showChapterLock"
     }
 }
