@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.animeextension.ar.mycima
 
-import android.util.Log
+import com.google.gson.JsonParser
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -61,7 +61,7 @@ class MyCima : ParsedAnimeHttpSource() {
         var seasonNumber = 1
         fun addEpisodes(document: Document) {
             document.select(sepisodeListSelector()).map { episodes.add(episodeFromElement(it)) }
-            document.select("${seasonsNextPageSelector(seasonNumber)}").firstOrNull()?.let {
+            document.select(seasonsNextPageSelector(seasonNumber)).firstOrNull()?.let {
                 seasonNumber++
                 addEpisodes(client.newCall(GET(it.attr("abs:href"), headers)).execute().asJsoup())
             }
@@ -75,8 +75,8 @@ class MyCima : ParsedAnimeHttpSource() {
 
     override fun episodeFromElement(element: Element): SEpisode {
         val episode = SEpisode.create()
-        episode.setUrlWithoutDomain(element.attr("abs:href").addTrailingSlash())
-        episode.name = "${element.text()}" // "${element.select("episodetitle").text()} $SeasonsName" // ${element.select("a:contains(موسم)").hasText()}"
+        episode.setUrlWithoutDomain(element.attr("abs:href"))
+        episode.name = element.text() // "${element.select("episodetitle").text()} $SeasonsName" // ${element.select("a:contains(موسم)").hasText()}"
         return episode
     }
 
@@ -90,15 +90,33 @@ class MyCima : ParsedAnimeHttpSource() {
         headers.forEach { newHeaderList[it.first] = it.second }
         val iframeResponse = client.newCall(GET(iframe, newHeaderList.toHeaders()))
             .execute().asJsoup()
-        return iframeResponse.select(videoListSelector()).map { videoFromElement(it) }
+        return videosFromElement(iframeResponse.selectFirst(videoListSelector()))
     }
 
-    override fun videoListSelector() = "source"
+    override fun videoListSelector() = "body"
 
-    override fun videoFromElement(element: Element): Video {
-        Log.i("lol", element.attr("href, src"))
-        return Video(element.attr("abs:href"), element.select("resolution").text(), element.attr("abs:src"), null)
+    private fun videosFromElement(element: Element): List<Video> {
+        val videoList = mutableListOf<Video>()
+        val script = element.select("script")
+            .firstOrNull { it.data().contains("player.qualityselector({") }
+        if (script != null) {
+            val videosString = script.data().substringAfter("sources: [")
+                .substringBefore("]").substringBeforeLast(",")
+            val videosArray = JsonParser.parseString("[$videosString]").asJsonArray
+            for (video in videosArray) {
+                val format = video.asJsonObject.get("format").asString
+                val url = video.asJsonObject.get("src").asString
+                if (format != "auto") {
+                    videoList.add(Video(url, format, url, null))
+                }
+            }
+            return videoList
+        }
+        val sourceTag = element.select("source").firstOrNull()!!
+        return listOf(Video(sourceTag.attr("src"),"Default", sourceTag.attr("src"), null))
     }
+
+    override fun videoFromElement(element: Element) = throw Exception("not used")
 
     override fun videoUrlParse(document: Document) = throw Exception("not used")
 
@@ -118,16 +136,15 @@ class MyCima : ParsedAnimeHttpSource() {
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         val url = if (query.isBlank()) {
-            ("$baseUrl/search/+/list/anime")
+            "$baseUrl/search/+/list/anime"
         } else {
-            (if (filters.isEmpty()) getFilterList() else filters).forEach() { filter ->
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
                     is CategoryList -> {
                         if (filter.state > 0) {
-                            val CatQ = getCategoryList()[filter.state].name
-                            val catUrl =
-                                ("$baseUrl/search/$query/list/$CatQ/?page_number=$page")
-                            return GET(catUrl.toString(), headers)
+                            val catQ = getCategoryList()[filter.state].name
+                            val catUrl = "$baseUrl/search/$query/list/$catQ/?page_number=$page"
+                            return GET(catUrl, headers)
                         }
                     }
                 }
