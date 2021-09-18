@@ -82,9 +82,24 @@ class TeamX : ParsedHttpSource() {
             val url = "$baseUrl/manga/page/$page/?".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
                 when (filter) {
-                    is GenreFilter -> url.addQueryParameter("ge", filter.toUriPart())
-                    is TypeFilter -> url.addQueryParameter("ty", filter.toUriPart())
-                    is StatusFilter -> url.addQueryParameter("st", filter.toUriPart())
+                    is StatusFilter -> {
+                        filter.state
+                            .filter { it.state != Filter.TriState.STATE_IGNORE }
+                            .forEach { url.addQueryParameter("st", it.id) }
+                    }
+                    is TypeFilter -> {
+                        filter.state
+                            .filter { it.state != Filter.TriState.STATE_IGNORE }
+                            .forEach { url.addQueryParameter("ty", it.id) }
+                    }
+                    is GenreFilter -> {
+                        filter.state
+                            .filter { it.state != Filter.TriState.STATE_IGNORE }
+                            .forEach { url.addQueryParameter("ge", it.id) }
+                    }
+                    // is GenreFilter -> url.addQueryParameter("ge", filter.toUriPart())
+                    // is TypeFilter -> url.addQueryParameter("ty", filter.toUriPart())
+                    // is StatusFilter -> url.addQueryParameter("st", filter.toUriPart())
                 }
             }
             GET(url.build().toString(), headers)
@@ -100,7 +115,7 @@ class TeamX : ParsedHttpSource() {
             }
             element.select("div.thumb").let {
                 title = element.select("div.info > h5 > a, div.info > h3 > a").text()
-                //thumbnail_url = element.select("img").attr("abs:src") + element.attr("style").substringAfter("background-image: url('").substringBeforeLast("')")
+                // thumbnail_url = element.select("img").attr("abs:src") + element.attr("style").substringAfter("background-image: url('").substringBeforeLast("')")
             }
             thumbnail_url = element.select("div.thumb img").attr("abs:src") + element.attr("style").substringAfter("background-image: url('").substringBeforeLast("')")
         }
@@ -183,99 +198,94 @@ class TeamX : ParsedHttpSource() {
         GenreFilter(getGenreFilters()),
     )
 
-    private class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Genre", vals)
-    private class TypeFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Type", vals)
-    private class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
+    class Type(name: String, val id: String = name) : Filter.TriState(name)
+    private class TypeFilter(types: List<Type>) : Filter.Group<Type>("Type", types)
+    class Status(name: String, val id: String = name) : Filter.TriState(name)
+    private class StatusFilter(statuses: List<Status>) : Filter.Group<Status>("Status", statuses)
+    class Genre(name: String, val id: String = name) : Filter.TriState(name)
+    private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
 
-    open fun getGenreFilters(): Array<Pair<String?, String>> = arrayOf(
-      Pair(null, "<Select>"),
-      Pair("1466", "+15"),
-      Pair("2307", "+18"),
-      Pair("2", "اكشن"),
-      Pair("3", "إثارة"),
-      Pair("2535", "إعادة إحياء"),
-      Pair("2364", "اتشي"),
-      Pair("2772", "اعمار/بناء"),
-      Pair("36", "الحياة اليومية"),
-      Pair("2797", "السفر عبر الزمن"),
-      Pair("142", "العاب"),
-      Pair("1261", "الواقع الافتراضي"),
-      Pair("1980", "ايسكاي"),
-      Pair("2206", "بطل غير إعتيادي"),
-      Pair("1509", "بوليسي"),
-      Pair("112", "تاريخي"),
-      Pair("108", "تراجيدي"),
-      Pair("1068", "ثأر"),
-      Pair("596", "جوسيه"),
-      Pair("35", "حريم"),
-      Pair("92", "حياة مدرسية"),
-      Pair("87", "خارق للطبيعة"),
-      Pair("39", "خيال"),
-      Pair("90", "خيال علمي"),
-      Pair("143", "داخل اللعبة"),
-      Pair("1777", "داخل رواية"),
-      Pair("91", "دراما"),
-      Pair("89", "دموي"),
-      Pair("1995", "ديني"),
-      Pair("114", "راشد"),
-      Pair("109", "رعب"),
-      Pair("93", "رومانسي"),
-      Pair("110", "رياضة"),
-      Pair("6", "زمكاني"),
-      Pair("496", "زومبي"),
-      Pair("88", "سحر"),
-      Pair("115", "سنين"),
-      Pair("111", "سينين"),
-      Pair("947", "شريحة من الحياة"),
-      Pair("157", "شوجو"),
-      Pair("33", "شونين"),
-      Pair("159", "شياطين"),
-      Pair("1124", "صيد"),
-      Pair("2346", "طبخ"),
-      Pair("1234", "طبى"),
-      Pair("176", "طبي"),
-      Pair("1978", "عسكري"),
-      Pair("1235", "عنف"),
-      Pair("38", "غموض"),
-      Pair("164", "فانتازيا"),
-      Pair("5", "فنون قتال"),
-      Pair("7", "قوة خارقة"),
-      Pair("1992", "كل الاعمار"),
-      Pair("37", "كوميدي"),
-      Pair("2201", "مصاص دماء"),
-      Pair("4", "مغامرات"),
-      Pair("2203", "ملائكة"),
-      Pair("158", "نبالة"),
-      Pair("2733", "نظام"),
-      Pair("1319", "نفسي"),
-      Pair("2770", "هندسة"),
-      Pair("113", "وحوش"),
-      Pair("34", "ويب تون")
+    open fun getGenreFilters(): List<Genre> = listOf(
+        Genre("+15", "1466"),
+        Genre("+18", "2307"),
+        Genre("اكشن", "2"),
+        Genre("إثارة", "3"),
+        Genre("إعادة إحياء", "2535"),
+        Genre("اتشي", "2364"),
+        Genre("اعمار/بناء", "2772"),
+        Genre("الحياة اليومية", "36"),
+        Genre("السفر عبر الزمن", "2797"),
+        Genre("العاب", "142"),
+        Genre("الواقع الافتراضي", "1261"),
+        Genre("ايسكاي", "1980"),
+        Genre("بطل غير إعتيادي", "2206"),
+        Genre("بوليسي", "1509"),
+        Genre("تاريخي", "112"),
+        Genre("تراجيدي", "108"),
+        Genre("ثأر", "1068"),
+        Genre("جوسيه", "596"),
+        Genre("حريم", "35"),
+        Genre("حياة مدرسية", "92"),
+        Genre("خارق للطبيعة", "87"),
+        Genre("خيال", "39"),
+        Genre("خيال علمي", "90"),
+        Genre("داخل اللعبة", "143"),
+        Genre("داخل رواية", "1777"),
+        Genre("دراما", "91"),
+        Genre("دموي", "89"),
+        Genre("ديني", "1995"),
+        Genre("راشد", "114"),
+        Genre("رعب", "109"),
+        Genre("رومانسي", "93"),
+        Genre("رياضة", "110"),
+        Genre("زمكاني", "6"),
+        Genre("زومبي", "496"),
+        Genre("سحر", "88"),
+        Genre("سنين", "115"),
+        Genre("سينين", "111"),
+        Genre("شريحة من الحياة", "947"),
+        Genre("شوجو", "157"),
+        Genre("شونين", "33"),
+        Genre("شياطين", "159"),
+        Genre("صيد", "1124"),
+        Genre("طبخ", "2346"),
+        Genre("طبى", "1234"),
+        Genre("طبي", "176"),
+        Genre("عسكري", "1978"),
+        Genre("عنف", "1235"),
+        Genre("غموض", "38"),
+        Genre("فانتازيا", "164"),
+        Genre("فنون قتال", "5"),
+        Genre("قوة خارقة", "7"),
+        Genre("كل الاعمار", "1992"),
+        Genre("كوميدي", "37"),
+        Genre("مصاص دماء", "2201"),
+        Genre("مغامرات", "4"),
+        Genre("ملائكة", "2203"),
+        Genre("نبالة", "158"),
+        Genre("نظام", "2733"),
+        Genre("نفسي", "1319"),
+        Genre("هندسة", "2770"),
+        Genre("وحوش", "113"),
+        Genre("ويب تون", "34")
     )
 
-    open fun getTypeFilter(): Array<Pair<String?, String>> = arrayOf(
-        Pair("", "<Select>"),
-        Pair("1996", "قرآن كريم"),
-        Pair("106", "مانجا يابانية"),
-        Pair("8", "مانها صينية"),
-        Pair("2196", "مانهوا روسية"),
-        Pair("9", "مانهوا كورية"),
-        Pair("2304", "ويب تون"),
-        Pair("2305", "ويب كوميك")
+    open fun getTypeFilter(): List<Type> = listOf(
+        Type("قرآن كريم", "1996"),
+        Type("مانجا يابانية", "106"),
+        Type("مانها صينية", "8"),
+        Type("مانهوا روسية", "2196"),
+        Type("مانهوا كورية", "9"),
+        Type("ويب تون", "2304"),
+        Type("ويب كوميك", "2305")
     )
 
-    open fun getStatusFilters(): Array<Pair<String?, String>> = arrayOf(
-        Pair("", "<Select>"),
-        Pair("10", "مكتملة"),
-        Pair("11", "مستمرة"),
-        Pair("964", "متوقفة"),
-        Pair("1997", "شريف"),
-        Pair("1778", "برومو"),
-        Pair("2306", "ون شوت")
+    open fun getStatusFilters(): List<Status> = listOf(
+        Status("مكتملة", "10"),
+        Status("مستمرة", "11"),
+        Status("متوقفة", "964"),
+        Status("شريف", "1997"),
+        Status("برومو", "1778"),
+        Status("ون شوت", "2306")
     )
-
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
-        fun toUriPart() = vals[state].first
-    }
 }
