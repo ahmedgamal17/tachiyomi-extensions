@@ -7,14 +7,13 @@ data class ChapterListDto(
     val limit: Int,
     val offset: Int,
     val total: Int,
-    val results: List<ChapterDto>,
+    val data: List<ChapterDataDto>,
 )
 
 @Serializable
 data class ChapterDto(
     val result: String,
     val data: ChapterDataDto,
-    val relationships: List<RelationshipDto>,
 )
 
 @Serializable
@@ -22,6 +21,7 @@ data class ChapterDataDto(
     val id: String,
     val type: String,
     val attributes: ChapterAttributesDto,
+    val relationships: List<RelationshipDto>,
 )
 
 @Serializable
@@ -33,4 +33,5 @@ data class ChapterAttributesDto(
     val data: List<String>,
     val dataSaver: List<String>,
     val hash: String,
+    val externalUrl: String?,
 )

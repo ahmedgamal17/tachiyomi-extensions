@@ -5,8 +5,7 @@ ext {
     extName = 'MangaLib'
     pkgNameSuffix = 'ru.libmanga'
     extClass = '.LibManga'
-    extVersionCode = 53
-    libVersion = '1.2'
+    extVersionCode = 54
 }
 
 apply from: "$rootDir/common.gradle"

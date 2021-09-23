@@ -11,14 +11,13 @@ data class MangaListDto(
     val limit: Int,
     val offset: Int,
     val total: Int,
-    val results: List<MangaDto>,
+    val data: List<MangaDataDto>,
 )
 
 @Serializable
 data class MangaDto(
     val result: String,
     val data: MangaDataDto,
-    val relationships: List<RelationshipDto>,
 )
 
 @Serializable
@@ -39,6 +38,7 @@ data class MangaDataDto(
     val id: String,
     val type: String,
     val attributes: MangaAttributesDto,
+    val relationships: List<RelationshipDto>,
 )
 
 @Serializable

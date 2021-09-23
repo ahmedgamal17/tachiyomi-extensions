@@ -5,8 +5,7 @@ ext {
     extName = 'Megatokyo'
     pkgNameSuffix = 'en.megatokyo'
     extClass = '.Megatokyo'
-    extVersionCode = 1
-    libVersion = '1.2'
+    extVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

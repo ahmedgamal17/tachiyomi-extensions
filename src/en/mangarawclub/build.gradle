@@ -5,8 +5,7 @@ ext {
     extName = 'manga-raw.club'
     pkgNameSuffix = 'en.mangarawclub'
     extClass = '.MangaRawClub'
-    extVersionCode = 3
-    libVersion = '1.2'
+    extVersionCode = 4
 	containsNsfw = true
 }
 

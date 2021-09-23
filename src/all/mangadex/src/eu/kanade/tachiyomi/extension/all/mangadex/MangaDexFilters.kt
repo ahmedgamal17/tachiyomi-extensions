@@ -11,7 +11,7 @@ class MangaDexFilters {
     internal fun getMDFilterList(preferences: SharedPreferences, dexLang: String): FilterList {
 
         return FilterList(
-            OriginalLanguageList(getOriginalLanguage()),
+            OriginalLanguageList(getOriginalLanguage(preferences, dexLang)),
             ContentRatingList(getContentRating(preferences, dexLang)),
             DemographicList(getDemographics()),
             StatusList(getStatus()),
@@ -24,8 +24,10 @@ class MangaDexFilters {
 
     private fun getContentRating(preferences: SharedPreferences, dexLang: String) = listOf(
         ContentRating("Safe").apply {
-            state =
-                preferences.getBoolean(MDConstants.getContentRatingSafePrefKey(dexLang), true)
+            state = preferences.getBoolean(
+                MDConstants.getContentRatingSafePrefKey(dexLang),
+                true
+            )
         },
         ContentRating("Suggestive").apply {
             state = preferences.getBoolean(
@@ -78,10 +80,25 @@ class MangaDexFilters {
     private class OriginalLanguageList(originalLanguage: List<OriginalLanguage>) :
         Filter.Group<OriginalLanguage>("Original language", originalLanguage)
 
-    private fun getOriginalLanguage() = listOf(
-        OriginalLanguage("Japanese (Manga)", "ja"),
-        OriginalLanguage("Chinese (Manhua)", "zh"),
-        OriginalLanguage("Korean (Manhwa)", "ko"),
+    private fun getOriginalLanguage(preferences: SharedPreferences, dexLang: String) = listOf(
+        OriginalLanguage("Japanese (Manga)", "ja").apply {
+            state = preferences.getBoolean(
+                MDConstants.getOriginalLanguageJapanesePref(dexLang),
+                false
+            )
+        },
+        OriginalLanguage("Chinese (Manhua)", "zh").apply {
+            state = preferences.getBoolean(
+                MDConstants.getOriginalLanguageChinesePref(dexLang),
+                false
+            )
+        },
+        OriginalLanguage("Korean (Manhwa)", "ko").apply {
+            state = preferences.getBoolean(
+                MDConstants.getOriginalLanguageKoreanPref(dexLang),
+                false
+            )
+        },
     )
 
     internal class Tag(val id: String, name: String) : Filter.TriState(name)
@@ -174,12 +191,16 @@ class MangaDexFilters {
         Filter.Select<String>("Excluded tags mode", arrayOf("And", "Or"), 1)
 
     val sortableList = listOf(
-        Pair("Number of follows", ""),
+        Pair("Alphabetic", "title"),
+        Pair("Chapter uploaded at", "latestUploadedChapter"),
+        Pair("Number of follows", "followedCount"),
         Pair("Manga created at", "createdAt"),
         Pair("Manga info updated at", "updatedAt"),
+        Pair("Relevant manga", "relevance"),
+        Pair("Year", "year")
     )
 
-    class SortFilter(sortables: Array<String>) : Filter.Sort("Sort", sortables, Selection(1, false))
+    class SortFilter(sortables: Array<String>) : Filter.Sort("Sort", sortables, Selection(2, false))
 
     internal fun addFiltersToUrl(url: HttpUrl.Builder, filters: FilterList): String {
         url.apply {
@@ -239,14 +260,12 @@ class MangaDexFilters {
                     }
                     is SortFilter -> {
                         if (filter.state != null) {
-                            if (filter.state!!.index != 0) {
-                                val query = sortableList[filter.state!!.index].second
-                                val value = when (filter.state!!.ascending) {
-                                    true -> "asc"
-                                    false -> "desc"
-                                }
-                                addQueryParameter("order[$query]", value)
+                            val query = sortableList[filter.state!!.index].second
+                            val value = when (filter.state!!.ascending) {
+                                true -> "asc"
+                                false -> "desc"
                             }
+                            addQueryParameter("order[$query]", value)
                         }
                     }
                     is TagList -> {
