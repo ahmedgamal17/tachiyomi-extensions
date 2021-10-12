@@ -31,17 +31,13 @@ class TeamX : ParsedHttpSource() {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /*override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0")
-        .add("Content-Encoding", "identity")*/
-
     // Decreases calls, helps with Cloudflare
     private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this
 
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga/page/$page/", headers)
+        return GET("$baseUrl/manga/page/$page/")
     }
 
     override fun popularMangaSelector() = "div > div.last-post-manga"
@@ -63,7 +59,7 @@ class TeamX : ParsedHttpSource() {
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/last-chapters/page/$page/", headers)
+        return GET("$baseUrl/last-chapters/page/$page/")
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
@@ -86,7 +82,7 @@ class TeamX : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/page/$page/?s=$query", headers)
+            GET("$baseUrl/page/$page/?s=$query")
         } else {
             val url = "$baseUrl/manga/page/$page/?".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
@@ -106,12 +102,9 @@ class TeamX : ParsedHttpSource() {
                             .filter { it.state != Filter.TriState.STATE_IGNORE }
                             .forEach { url.addQueryParameter("ge", it.id) }
                     }
-                    // is GenreFilter -> url.addQueryParameter("ge", filter.toUriPart())
-                    // is TypeFilter -> url.addQueryParameter("ty", filter.toUriPart())
-                    // is StatusFilter -> url.addQueryParameter("st", filter.toUriPart())
                 }
             }
-            GET(url.build().toString(), headers)
+            GET(url.build().toString())
         }
     }
 
@@ -171,7 +164,7 @@ class TeamX : ParsedHttpSource() {
         fun addChapters(document: Document) {
             document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
             document.select("${chapterNextPageSelector()}").firstOrNull()
-                ?.let { addChapters(client.newCall(GET(it.attr("abs:href").addTrailingSlash(), headers)).execute().asJsoup()) }
+                ?.let { addChapters(client.newCall(GET(it.attr("abs:href").addTrailingSlash())).execute().asJsoup()) }
         }
 
         addChapters(response.asJsoup())
