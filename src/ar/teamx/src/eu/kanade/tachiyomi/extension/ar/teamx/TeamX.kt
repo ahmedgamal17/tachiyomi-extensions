@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,7 +20,7 @@ class TeamX : ParsedHttpSource() {
 
     override val name = "TeamX"
 
-    override val baseUrl = "https://team1x1.com"
+    override val baseUrl = "http://teamxmanga.com"
 
     override val lang = "ar"
 
@@ -32,9 +31,9 @@ class TeamX : ParsedHttpSource() {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    /*override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0")
-        .add("Content-Encoding", "identity")
+        .add("Content-Encoding", "identity")*/
 
     // Decreases calls, helps with Cloudflare
     private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this
@@ -54,7 +53,7 @@ class TeamX : ParsedHttpSource() {
             }
             element.select("div.thumb").let {
                 title = element.select("h3").text()
-                thumbnail_url = element.select("img").attr("src")
+                thumbnail_url = element.select("img").attr("abs:src")
             }
         }
     }
@@ -69,7 +68,17 @@ class TeamX : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        return SManga.create().apply {
+            element.select("a").let {
+                setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+            }
+            thumbnail_url = element.attr("style").substringAfter("url('").substringBefore("')")
+            element.select("div.thumb").let {
+                title = element.select("h5").text()
+            }
+        }
+    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
