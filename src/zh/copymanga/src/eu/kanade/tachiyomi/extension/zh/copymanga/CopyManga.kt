@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.zh.copymanga
 import android.app.Application
 import android.content.SharedPreferences
 import com.luhuiguo.chinese.ChineseUtils
+import com.squareup.duktape.Duktape
 import eu.kanade.tachiyomi.lib.ratelimit.SpecificHostRateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -20,6 +21,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -116,8 +118,8 @@ class CopyManga : ConfigurableSource, HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // when perform html search, sort by popular
-        // val apiUrlString = "$baseUrl/api/kb/web/search/comics?limit=$searchPageSize&offset=${(page - 1) * searchPageSize}&platform=2&q=$query&q_type="
-        val apiUrlString = "$baseUrl/api/v3/search/comic?limit=$searchPageSize&offset=${(page - 1) * searchPageSize}&platform=2&q=$query&q_type="
+        val apiUrlString = "$baseUrl/api/kb/web/searchs/comics?limit=$searchPageSize&offset=${(page - 1) * searchPageSize}&platform=2&q=$query&q_type="
+//        val apiUrlString = "$baseUrl/api/v3/search/comic?limit=$searchPageSize&offset=${(page - 1) * searchPageSize}&platform=2&q=$query&q_type="
         val htmlUrlString = "$baseUrl/comics?offset=${(page - 1) * popularLatestPageSize}&limit=$popularLatestPageSize"
         val requestUrlString: String
 
@@ -179,7 +181,7 @@ class CopyManga : ConfigurableSource, HttpSource() {
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val disposablePass = document.select("div.detailPass").first()?.attr("disposable")
+        val disposablePass = this.evaluateScript(document, "dio")
 
         // Get encrypted chapters data from another endpoint
         val chapterResponse =
@@ -201,32 +203,24 @@ class CopyManga : ConfigurableSource, HttpSource() {
 
         val retChapter = ArrayList<SChapter>()
         // Get chapters according to groups
-        chapterGroups.keys().forEach { groupName ->
+        val keys = chapterGroups.keys().asSequence().toList()
+        keys.filter { it -> it == "default" }.forEach { groupName ->
             run {
                 val chapterGroup = chapterGroups.getJSONObject(groupName)
+                fillChapters(chapterGroup, retChapter, comicPathWord)
+            }
+        }
 
-                // group's last update time
-                val groupLastUpdateTime =
-                    chapterGroup.optJSONObject("last_chapter")?.optString("datetime_created")
-
-                // chapters in the group to
-                val chapterArray = chapterGroup.optJSONArray("chapters")
-                if (chapterArray != null) {
-                    for (i in 0 until chapterArray.length()) {
-                        val chapter = chapterArray.getJSONObject(i)
-                        retChapter.add(
-                            SChapter.create().apply {
-                                name = chapter.getString("name")
-                                date_upload = stringToUnixTimestamp(groupLastUpdateTime)
-                                url = "/comic/$comicPathWord/chapter/${chapter.getString("id")}"
-                            }
-                        )
-                    }
-                }
+        val otherChapters = ArrayList<SChapter>()
+        keys.filter { it -> it != "default" }.forEach { groupName ->
+            run {
+                val chapterGroup = chapterGroups.getJSONObject(groupName)
+                fillChapters(chapterGroup, otherChapters, comicPathWord)
             }
         }
 
         // place others to top, as other group updates not so often
+        retChapter.addAll(0, otherChapters)
         return retChapter.asReversed()
     }
 
@@ -234,7 +228,7 @@ class CopyManga : ConfigurableSource, HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val disposableData = document.select("div.imageData").first().attr("contentKey")
-        val disposablePass = document.select("div.imagePass").first()?.attr("contentKey")
+        val disposablePass = this.evaluateScript(document, "jojo")
 
         val pageJsonString = decryptChapterData(disposableData, disposablePass)
         val pageArray = JSONArray(pageJsonString)
@@ -420,6 +414,27 @@ class CopyManga : ConfigurableSource, HttpSource() {
         return manga
     }
 
+    private fun fillChapters(chapterGroup: JSONObject, retChapter: ArrayList<SChapter>, comicPathWord: String?) {
+        // group's last update time
+        val groupLastUpdateTime =
+            chapterGroup.optJSONObject("last_chapter")?.optString("datetime_created")
+
+        // chapters in the group to
+        val chapterArray = chapterGroup.optJSONArray("chapters")
+        if (chapterArray != null) {
+            for (i in 0 until chapterArray.length()) {
+                val chapter = chapterArray.getJSONObject(i)
+                retChapter.add(
+                    SChapter.create().apply {
+                        name = chapter.getString("name")
+                        url = "/comic/$comicPathWord/chapter/${chapter.getString("id")}"
+                        date_upload = stringToUnixTimestamp(groupLastUpdateTime)
+                    }
+                )
+            }
+        }
+    }
+
     private fun byteArrayToHexString(byteArray: ByteArray): String {
         var sb = ""
         for (b in byteArray) {
@@ -448,11 +463,24 @@ class CopyManga : ConfigurableSource, HttpSource() {
         }
     }
 
+    private fun evaluateScript(document: Document, expression: String): String {
+        return Duktape.create().use { duktape ->
+            document.select("script:not([src])").map(Element::data).forEach { script ->
+                try {
+                    duktape.evaluate(script)
+                } catch (ex: Exception) {
+                    // Ignore any exception from evaluating the script
+                }
+            }
+            duktape.evaluate(expression).toString()
+        }
+    }
+
     // thanks to unpacker toolsite, http://matthewfl.com/unPacker.html
     private fun decryptChapterData(disposableData: String, disposablePass: String?): String {
         val prePart = disposableData.substring(0, 16)
         val postPart = disposableData.substring(16, disposableData.length)
-        val disposablePassByteArray = (disposablePass ?: "xxxmanga.abc.key").toByteArray(Charsets.UTF_8)
+        val disposablePassByteArray = (disposablePass ?: "hotmanga.aes.key").toByteArray(Charsets.UTF_8)
         val prepartByteArray = prePart.toByteArray(Charsets.UTF_8)
         val dataByteArray = hexStringToByteArray(postPart)
 

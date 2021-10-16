@@ -91,6 +91,7 @@ class TaoSect : HttpSource() {
             .addQueryParameter("orderby", "date")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", (PROJECTS_PER_PAGE * 2).toString())
+            .addQueryParameter("_fields", "post_id")
             .toString()
 
         return GET(apiUrl, apiHeaders)
@@ -133,8 +134,6 @@ class TaoSect : HttpSource() {
         val projectsResult = projectsResponse.parseAs<List<TaoSectProjectDto>>()
 
         val projectList = projectsResult.map(::popularMangaFromObject)
-
-        projectsResponse.close()
 
         return MangasPage(projectList, hasNextPage)
     }
@@ -210,6 +209,13 @@ class TaoSect : HttpSource() {
                         }
                     }
                 }
+                is NsfwFilter -> {
+                    if (filter.state == Filter.TriState.STATE_INCLUDE) {
+                        apiUrl.addQueryParameter("mais_18", "1")
+                    } else if (filter.state == Filter.TriState.STATE_EXCLUDE) {
+                        apiUrl.addQueryParameter("mais_18", "0")
+                    }
+                }
             }
         }
 
@@ -268,39 +274,38 @@ class TaoSect : HttpSource() {
             .substringAfterLast("projeto/")
             .substringBefore("/")
 
-        val apiUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", "1")
-            .addQueryParameter("slug", projectSlug)
-            .addQueryParameter("_fields", "id,slug,capitulos")
+        val apiUrl = "$baseUrl/$API_BASE_PATH/capitulos".toHttpUrl().newBuilder()
+            .addQueryParameter("projeto", projectSlug)
+            .addQueryParameter("per_page", "1000")
+            .addQueryParameter("order", "desc")
+            .addQueryParameter("orderby", "sequencia")
+            .addQueryParameter("_fields", "nome_capitulo,post_id,slug,data_insercao")
             .toString()
 
         return GET(apiUrl, apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<List<TaoSectProjectDto>>()
+        val result = response.parseAs<List<TaoSectChapterDto>>()
 
         if (result.isNullOrEmpty()) {
             throw Exception(PROJECT_NOT_FOUND)
         }
 
-        val project = result[0]
-
         // Count the project views, requested by the scanlator.
-        val countViewRequest = countViewRequest(project.id.toString())
+        val countViewRequest = countProjectViewRequest(result[0].projectId!!)
         runCatching { client.newCall(countViewRequest).execute().close() }
 
-        return project.volumes!!
-            .flatMap { it.chapters }
-            .reversed()
-            .map { chapterFromObject(it, project) }
+        val projectSlug = response.request.url.queryParameter("projeto")!!
+
+        return result.map { chapterFromObject(it, projectSlug) }
     }
 
-    private fun chapterFromObject(obj: TaoSectChapterDto, project: TaoSectProjectDto): SChapter = SChapter.create().apply {
+    private fun chapterFromObject(obj: TaoSectChapterDto, projectSlug: String): SChapter = SChapter.create().apply {
         name = obj.name
         scanlator = this@TaoSect.name
         date_upload = obj.date.toDate()
-        url = "/leitor-online/projeto/${project.slug!!}/${obj.slug}/"
+        url = "/leitor-online/projeto/$projectSlug/${obj.slug}/"
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -311,54 +316,45 @@ class TaoSect : HttpSource() {
             .removeSuffix("/")
             .substringAfterLast("/")
 
-        val apiUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", "1")
-            .addQueryParameter("slug", projectSlug)
-            .addQueryParameter("chapter_slug", chapterSlug)
-            .addQueryParameter("_fields", "id,slug,capitulos")
+        val apiUrl = "$baseUrl/$API_BASE_PATH/capitulos/".toHttpUrl().newBuilder()
+            .addPathSegment(projectSlug)
+            .addPathSegment(chapterSlug)
+            .addQueryParameter("_fields", "id_capitulo,paginas,post_id")
             .toString()
 
         return GET(apiUrl, apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<List<TaoSectProjectDto>>()
+        val result = response.parseAs<TaoSectChapterDto>()
 
-        if (result.isNullOrEmpty()) {
-            throw Exception(PROJECT_NOT_FOUND)
+        if (result.pages.isNullOrEmpty()) {
+            return emptyList()
         }
 
-        val project = result[0]
-        val chapterSlug = response.request.url.queryParameter("chapter_slug")!!
+        val apiUrlPaths = response.request.url.pathSegments
+        val projectSlug = apiUrlPaths[4]
+        val chapterSlug = apiUrlPaths[5]
 
-        val chapter = project.volumes!!
-            .flatMap { it.chapters }
-            .firstOrNull { it.slug == chapterSlug }
-            ?: throw Exception(CHAPTER_NOT_FOUND)
+        val chapterUrl = "$baseUrl/leitor-online/projeto/$projectSlug/$chapterSlug"
 
-        val chapterUrl = "$baseUrl/leitor-online/projeto/${project.slug!!}/${chapter.slug}"
-
-        // Count the chapter views, requested by the scanlator.
-        val countViewRequest = countViewRequest(project.id!!.toString(), chapter.id)
-        runCatching { client.newCall(countViewRequest).execute().close() }
-
-        val pages = chapter.pages.mapIndexed { i, pageUrl ->
+        val pages = result.pages.mapIndexed { i, pageUrl ->
             Page(i, chapterUrl, pageUrl)
         }
+
+        // Count the project and chapter views, requested by the scanlator.
+        val countViewRequest = countProjectViewRequest(result.projectId!!, result.id)
+        runCatching { client.newCall(countViewRequest).execute().close() }
 
         // Check if the pages have exceeded the view limit of Google Drive.
         val firstPage = pages[0]
 
         val hasExceededViewLimit = runCatching {
             val firstPageRequest = imageRequest(firstPage)
-            val firstPageResponse = client.newCall(firstPageRequest).execute()
 
-            val hasExceeded = firstPageResponse.headers["Content-Type"]!!
-                .contains("text/html")
-
-            firstPageResponse.close()
-
-            hasExceeded
+            client.newCall(firstPageRequest).execute().use {
+                it.headers["Content-Type"]!!.contains("text/html")
+            }
         }
 
         if (hasExceededViewLimit.getOrDefault(false)) {
@@ -381,13 +377,13 @@ class TaoSect : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private fun countViewRequest(projectId: String, chapterId: String? = null): Request {
+    private fun countProjectViewRequest(projectId: String, chapterId: String? = null): Request {
         val formBodyBuilder = FormBody.Builder()
-            .add("action", "update_views")
+            .add("action", "update_views_v2")
             .add("projeto", projectId)
 
-        if (chapterId.isNullOrBlank().not()) {
-            formBodyBuilder.add("capitulo", chapterId!!)
+        if (chapterId != null) {
+            formBodyBuilder.add("capitulo", chapterId)
         }
 
         val formBody = formBodyBuilder.build()
@@ -405,7 +401,8 @@ class TaoSect : HttpSource() {
         StatusFilter(getStatusList()),
         GenreFilter(getGenreList()),
         SortFilter(),
-        FeaturedFilter()
+        FeaturedFilter(),
+        NsfwFilter()
     )
 
     private class Tag(val id: String, name: String) : Filter.TriState(name)
@@ -423,6 +420,8 @@ class TaoSect : HttpSource() {
     )
 
     private class FeaturedFilter : Filter.TriState("Mostrar destaques")
+
+    private class NsfwFilter : Filter.TriState("Mostrar conteúdo +18")
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromString(it.body?.string().orEmpty())
@@ -494,7 +493,6 @@ class TaoSect : HttpSource() {
         private const val DEFAULT_ORDERBY = 3
         private const val DEFAULT_FIELDS = "title,thumbnail,link"
         private const val PROJECT_NOT_FOUND = "Projeto não encontrado."
-        private const val CHAPTER_NOT_FOUND = "Capítulo não encontrado."
         private const val EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT = "Limite de visualizações atingido " +
             "no Google Drive. Aguarde com que o limite seja reestabelecido."
 

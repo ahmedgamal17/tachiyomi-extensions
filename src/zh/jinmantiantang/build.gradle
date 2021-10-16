@@ -5,8 +5,8 @@ ext {
     extName = 'Jinmantiantang'
     pkgNameSuffix = 'zh.jinmantiantang'
     extClass = '.Jinmantiantang'
-    extVersionCode = 15
-    containsNsfw = true
+    extVersionCode = 16
+    isNsfw = true
 }
 
 dependencies {

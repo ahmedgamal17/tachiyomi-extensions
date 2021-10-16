@@ -15,6 +15,7 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
     override val sources = listOf(
         MultiLang("Asura Scans", "https://www.asurascans.com", listOf("en", "tr"), className = "AsuraScansFactory", pkgName = "asurascans", overrideVersionCode = 6),
         SingleLang("KlanKomik", "https://klankomik.com", "id", overrideVersionCode = 1),
+        SingleLang("Kombatch", "https://kombatch.com", "id"),
         SingleLang("MasterKomik", "https://masterkomik.com", "id", overrideVersionCode = 1),
         SingleLang("Kaisar Komik", "https://kaisarkomik.com", "id", overrideVersionCode = 1),
         SingleLang("Rawkuma", "https://rawkuma.com/", "ja"),
@@ -31,7 +32,7 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
         SingleLang("GURU Komik", "https://gurukomik.com", "id"),
         SingleLang("Shea Manga", "https://sheamanga.my.id", "id", overrideVersionCode = 1),
         SingleLang("Komik AV", "https://komikav.com", "id", overrideVersionCode = 1),
-        SingleLang("Komik Cast", "https://komikcast.com", "id", overrideVersionCode = 7),
+        SingleLang("Komik Cast", "https://komikcast.com", "id", overrideVersionCode = 8),
         SingleLang("West Manga", "https://westmanga.info", "id", overrideVersionCode = 1),
         SingleLang("MangaSwat", "https://mangaswat.com", "ar", overrideVersionCode = 3),
         SingleLang("Manga Raw.org", "https://mangaraw.org", "ja", className = "MangaRawOrg", overrideVersionCode = 1),
@@ -53,6 +54,7 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
         SingleLang("Hakai Scan", "http://hakaiscan.xyz", "pt-BR", isNsfw = true),
         SingleLang("Batoto Scans", "https://batotoscans.com", "en", isNsfw = true),
         SingleLang("Random Scans", "https://randomscans.xyz", "en"),
+        SingleLang("Fênix Scanlator", "https://fenixscanlator.xyz", "pt-BR", className = "FenixScanlator", overrideVersionCode = 2)
     )
 
     companion object {

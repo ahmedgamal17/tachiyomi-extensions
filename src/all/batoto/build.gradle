@@ -6,8 +6,8 @@ ext {
     extName = 'Bato.to'
     pkgNameSuffix = 'all.batoto'
     extClass = '.BatoToFactory'
-    extVersionCode = 14
-    containsNsfw = true
+    extVersionCode = 15
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

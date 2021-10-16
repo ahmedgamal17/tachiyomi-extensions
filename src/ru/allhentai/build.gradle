@@ -5,8 +5,8 @@ ext {
     extName = 'AllHentai'
     pkgNameSuffix = 'ru.allhentai'
     extClass = '.AllHentai'
-    extVersionCode = 11
-    containsNsfw = true
+    extVersionCode = 12
+    isNsfw = true
 }
 
 dependencies {

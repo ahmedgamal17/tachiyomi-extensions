@@ -6,8 +6,8 @@ ext {
     extName = 'Comick.fun'
     pkgNameSuffix = 'all.comickfun'
     extClass = '.ComickFunFactory'
-    extVersionCode = 6
-    containsNsfw = true
+    extVersionCode = 7
+    isNsfw = true
 }
 
 dependencies {

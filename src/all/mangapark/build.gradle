@@ -6,8 +6,8 @@ ext {
     extName = 'MangaPark v3'
     pkgNameSuffix = 'all.mangapark'
     extClass = '.MangaParkFactory'
-    extVersionCode = 9
-    containsNsfw = true
+    extVersionCode = 12
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
