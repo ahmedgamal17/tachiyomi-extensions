@@ -45,14 +45,13 @@ class WPMangaStreamGenerator : ThemeSourceGenerator {
         SingleLang("World Romance Translation", "https://wrt.my.id", "id", overrideVersionCode = 3),
         SingleLang("The Apollo Team", "https://theapollo.team", "en"),
         SingleLang("Sekte Doujin", "https://sektedoujin.xyz", "id", isNsfw = true, overrideVersionCode = 2),
-        SingleLang("Lemon Juice Scan", "https://lemonjuicescan.com", "pt-BR", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Phoenix Fansub", "https://phoenixfansub.com", "es", overrideVersionCode = 1),
         SingleLang("Geass Scanlator", "https://geassscan.xyz", "pt-BR", overrideVersionCode = 2),
         SingleLang("Imagine Scan", "https://imaginescan.com.br", "pt-BR", isNsfw = true),
         SingleLang("Vapo Scan", "https://vaposcans.com", "pt-BR", overrideVersionCode = 2),
         SingleLang("Argos Hentai", "https://agshentai.com", "pt-BR", isNsfw = true),
         SingleLang("Hakai Scan", "http://hakaiscan.xyz", "pt-BR", isNsfw = true),
-        SingleLang("Batoto Scans", "https://batotoscans.com", "en", isNsfw = true),
+        SingleLang("Snudae Scans", "https://snudaescans.com", "en", isNsfw = true, className = "BatotoScans", overrideVersionCode = 1),
         SingleLang("Random Scans", "https://randomscans.xyz", "en"),
         SingleLang("Fênix Scanlator", "https://fenixscanlator.xyz", "pt-BR", className = "FenixScanlator", overrideVersionCode = 2)
     )
