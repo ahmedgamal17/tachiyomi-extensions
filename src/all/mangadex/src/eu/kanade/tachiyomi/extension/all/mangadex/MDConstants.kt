@@ -15,8 +15,10 @@ object MDConstants {
     const val manga = "manga"
     const val coverArt = "cover_art"
     const val scanlator = "scanlation_group"
+    const val uploader = "user"
     const val author = "author"
     const val artist = "artist"
+    const val legacyNoGroupId = "00e03853-1b96-4f41-9542-c71b8692033b"
 
     const val cdnUrl = "https://uploads.mangadex.org"
     const val apiUrl = "https://api.mangadex.org"
@@ -32,6 +34,7 @@ object MDConstants {
 
     const val prefixIdSearch = "id:"
     const val prefixChSearch = "ch:"
+    const val prefixGrpSearch = "grp:"
 
     const val coverQualityPref = "thumbnailQuality"
 
@@ -57,45 +60,24 @@ object MDConstants {
         return "${standardHttpsPortPref}_$dexLang"
     }
 
-    private const val contentRatingSafePref = "contentRatingSafe"
+    private const val contentRatingPref = "contentRating"
+    const val contentRatingPrefValSafe = "safe"
+    const val contentRatingPrefValSuggestive = "suggestive"
+    const val contentRatingPrefValErotica = "erotica"
+    const val contentRatingPrefValPornographic = "pornographic"
+    val contentRatingPrefDefaults = setOf(contentRatingPrefValSafe, contentRatingPrefValSuggestive)
 
-    fun getContentRatingSafePrefKey(dexLang: String): String {
-        return "${contentRatingSafePref}_$dexLang"
+    fun getContentRatingPrefKey(dexLang: String): String {
+        return "${contentRatingPref}_$dexLang"
     }
 
-    private const val contentRatingSuggestivePref = "contentRatingSuggestive"
+    private const val originalLanguagePref = "originalLanguage"
+    const val originalLanguagePrefValJapanese = "ja"
+    const val originalLanguagePrefValChinese = "zh"
+    const val originalLanguagePrefValChineseHk = "zh-hk"
+    const val originalLanguagePrefValKorean = "ko"
 
-    fun getContentRatingSuggestivePrefKey(dexLang: String): String {
-        return "${contentRatingSuggestivePref}_$dexLang"
-    }
-
-    private const val contentRatingEroticaPref = "contentRatingErotica"
-
-    fun getContentRatingEroticaPrefKey(dexLang: String): String {
-        return "${contentRatingEroticaPref}_$dexLang"
-    }
-
-    private const val contentRatingPornographicPref = "contentRatingPornographic"
-
-    fun getContentRatingPornographicPrefKey(dexLang: String): String {
-        return "${contentRatingPornographicPref}_$dexLang"
-    }
-
-    private const val originalLanguageJapanesePref = "originalLanguageJapanese"
-
-    fun getOriginalLanguageJapanesePref(dexLang: String): String {
-        return "${originalLanguageJapanesePref}_$dexLang"
-    }
-
-    private const val originalLanguageChinesePref = "originalLanguageChinese"
-
-    fun getOriginalLanguageChinesePref(dexLang: String): String {
-        return "${originalLanguageChinesePref}_$dexLang"
-    }
-
-    private const val originalLanguageKoreanPref = "originalLanguageKorean"
-
-    fun getOriginalLanguageKoreanPref(dexLang: String): String {
-        return "${originalLanguageKoreanPref}_$dexLang"
+    fun getOriginalLanguagePrefKey(dexLang: String): String {
+        return "${originalLanguagePref}_$dexLang"
     }
 }
