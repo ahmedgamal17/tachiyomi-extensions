@@ -1,6 +1,12 @@
 package eu.kanade.tachiyomi.extension.ar.teamx
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.text.InputType
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,12 +21,16 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 class TeamX : ParsedHttpSource() {
 
     override val name = "TeamX"
 
-    override val baseUrl = "http://teamxmanga.com"
+    override val baseUrl by lazy { getPrefBaseUrl() }
+    //override val baseUrl = "http://teamxmanga.com"
 
     override val lang = "ar"
 
@@ -30,6 +40,21 @@ class TeamX : ParsedHttpSource() {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
+    
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(ADDRESS_TITLE, ADDRESS_DEFAULT)!!
+
+    companion object {
+        private const val ADDRESS_TITLE = "Site URL Address"
+        private const val ADDRESS_DEFAULT = ""
+    }
+    
+    private val checkedBaseUrl: String
+        get(): String = if (baseUrl.isNotEmpty()) baseUrl
+        else throw RuntimeException("Set Site url in extension settings")
 
     // Decreases calls, helps with Cloudflare
     private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this
