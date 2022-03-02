@@ -30,9 +30,16 @@ class Tappytoon(override val lang: String) : HttpSource() {
 
     override val client = network.client.newBuilder().addInterceptor { chain ->
         val res = chain.proceed(chain.request())
-        if (res.isSuccessful) return@addInterceptor res
+        val mime = res.headers["Content-Type"]
+        if (res.isSuccessful) {
+            if (mime != "application/octet-stream")
+                return@addInterceptor res
+            // Fix Content-Type header
+            return@addInterceptor res.newBuilder()
+                .header("Content-Type", "image/jpeg").build()
+        }
         // Throw JSON error if available
-        if (res.headers["Content-Type"] == "application/json") {
+        if (mime == "application/json") {
             res.body?.string()?.let(json::parseToJsonElement)?.run {
                 throw Error(jsonObject["message"]!!.jsonPrimitive.content)
             }
@@ -153,7 +160,7 @@ class Tappytoon(override val lang: String) : HttpSource() {
             SChapter.create().apply {
                 name = it.toString()
                 url = it.id.toString()
-                chapter_number = it.order
+                chapter_number = it.order + 1f
                 date_upload = dateFormat.parse(it.createdAt)?.time ?: 0L
             }
         }

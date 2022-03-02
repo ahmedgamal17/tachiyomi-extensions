@@ -21,8 +21,6 @@ class SweetTimeScan : Madara(
         .addInterceptor(RateLimitInterceptor(1, 2, TimeUnit.SECONDS))
         .build()
 
-    override fun popularMangaSelector() = "div.page-item-detail.manga"
-
     // The source has novels in text format, so we need to filter them.
     override fun searchMangaParse(response: Response): MangasPage {
         val mangaPage = super.searchMangaParse(response)
@@ -36,33 +34,6 @@ class SweetTimeScan : Madara(
     override fun imageFromElement(element: Element): String {
         return baseUrl + super.imageFromElement(element)?.substringAfter(baseUrl)
     }
-
-    // [...document.querySelectorAll('input[name="genre[]"]')]
-    //   .map(x => `Genre("${document.querySelector('label[for=' + x.id + ']').innerHTML.trim()}", "${x.value}")`)
-    //   .join(',\n')
-    override fun getGenreList(): List<Genre> = listOf(
-        Genre("Ação", "acao"),
-        Genre("Artes Marciais", "artes-marciais"),
-        Genre("Aventura", "aventura"),
-        Genre("Comédia", "comedia"),
-        Genre("Drama", "drama"),
-        Genre("Ecchi", "ecchi"),
-        Genre("Escolar", "escolar"),
-        Genre("Fantasia", "fantasia"),
-        Genre("Histórico", "historico"),
-        Genre("Isekai", "isekai"),
-        Genre("Josei", "josei"),
-        Genre("Magia", "magia"),
-        Genre("Médico", "medico"),
-        Genre("Mistério", "misterio"),
-        Genre("Psicológico", "psicologico"),
-        Genre("Reencarnação", "reencarnacao"),
-        Genre("Romance", "romance"),
-        Genre("Sci Fi", "sci-fi"),
-        Genre("Shoujo", "shoujo"),
-        Genre("Slice of Life", "slice-of-life"),
-        Genre("Sobrenatural", "sobrenatural")
-    )
 
     companion object {
         private val NOVEL_REGEX = "novel|livro".toRegex(RegexOption.IGNORE_CASE)

@@ -9,7 +9,8 @@ data class TagsDto(
 @Serializable
 data class BranchesDto(
     val id: Long,
-    val count_chapters: Int
+    val count_chapters: Int,
+    val publishers: List<PublisherDto>
 )
 
 @Serializable
@@ -25,7 +26,12 @@ data class LibraryDto(
     val en_name: String,
     val rus_name: String,
     val dir: String,
-    val img: ImgDto
+    val img: ImgDto,
+    val bookmark_type: String? = null
+)
+@Serializable
+data class MyLibraryDto(
+    val title: LibraryDto
 )
 
 @Serializable
@@ -85,8 +91,7 @@ data class BookDto(
     val name: String,
     val upload_date: String,
     val is_paid: Boolean,
-    val is_bought: Boolean?,
-    val publishers: List<PublisherDto>
+    val is_bought: Boolean?
 )
 
 @Serializable
@@ -109,5 +114,6 @@ data class ChunksPageDto(
 
 @Serializable
 data class UserDto(
+    val id: Long,
     val access_token: String
 )

@@ -5,9 +5,11 @@ import eu.kanade.tachiyomi.multisrc.wpmangareader.WPMangaReader
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class Kiryuu : WPMangaReader("Kiryuu", "https://kiryuu.id", "id") {
+class Kiryuu : WPMangaReader("Kiryuu", "https://kiryuu.id", "id", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))) {
     // Formerly "Kiryuu (WP Manga Stream)"
     override val id = 3639673976007021338
 
@@ -34,7 +36,7 @@ class Kiryuu : WPMangaReader("Kiryuu", "https://kiryuu.id", "id") {
         )
 
         title = document.selectFirst(".thumb img").attr("title")
-        thumbnail_url = document.select(".thumb img").attr("abs:data-lazy-src")
+        thumbnail_url = document.select(".thumb img").attr("src")
         description = document.select(".desc, .entry-content[itemprop=description]").joinToString("\n") { it.text() }
 
         // add series type(manga/manhwa/manhua/other) thinggy to genre

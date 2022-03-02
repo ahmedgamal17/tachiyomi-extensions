@@ -6,12 +6,11 @@ ext {
     extName = 'ManHuaGui'
     pkgNameSuffix = 'zh.manhuagui'
     extClass = '.Manhuagui'
-    extVersionCode = 10
+    extVersionCode = 11
 }
 
 dependencies {
-    compileOnly "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
-    compileOnly "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
+    compileOnly libs.bundles.coroutines
     implementation project(':lib-ratelimit')
 }
 

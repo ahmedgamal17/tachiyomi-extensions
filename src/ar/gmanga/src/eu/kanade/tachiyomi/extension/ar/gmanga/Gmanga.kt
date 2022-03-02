@@ -2,7 +2,10 @@ package eu.kanade.tachiyomi.extension.ar.gmanga
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.ar.gmanga.GmangaPreferences.Companion.PREF_CHAPTER_LISTING
+import eu.kanade.tachiyomi.extension.ar.gmanga.GmangaPreferences.Companion.PREF_CHAPTER_LISTING_SHOW_ALL
 import eu.kanade.tachiyomi.extension.ar.gmanga.GmangaPreferences.Companion.PREF_CHAPTER_LISTING_SHOW_POPULAR
+import eu.kanade.tachiyomi.extension.ar.gmanga.dto.TableDto
+import eu.kanade.tachiyomi.extension.ar.gmanga.dto.asChapterList
 import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -16,26 +19,23 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class Gmanga : ConfigurableSource, HttpSource() {
 
-    private val domain: String = "gmanga.me"
+    private val domain: String = "gmanga.org"
 
     override val baseUrl: String = "https://$domain"
 
@@ -66,41 +66,35 @@ class Gmanga : ConfigurableSource, HttpSource() {
         return GET("$baseUrl/api/mangas/$mangaId/releases", headers)
     }
 
-    @ExperimentalStdlibApi
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = decryptResponse(response)
 
-        val chapters: List<JsonArray> = buildList {
-            val allChapters: ArrayList<JsonArray> = ArrayList()
-            data["rows"]!!.jsonArray[0].jsonObject["rows"]!!.jsonArray.forEach { release ->
-                val chapter = data["rows"]!!.jsonArray[2].jsonObject["rows"]!!.jsonArray.filter { it.jsonArray[0] == release.jsonArray[4] }
-                allChapters.addAll(chapter.map { it.jsonArray })
-                val team = data["rows"]!!.jsonArray[1].jsonObject["rows"]!!.jsonArray.filter { it.jsonArray[0] == release.jsonArray[5] }
-                allChapters.addAll(team.map { it.jsonArray })
-                allChapters.add(release.jsonArray)
-            }
+        val table = json.decodeFromJsonElement<TableDto>(data)
+        val chapterList = table.asChapterList()
 
-            when (preferences.getString(PREF_CHAPTER_LISTING)) {
-                PREF_CHAPTER_LISTING_SHOW_POPULAR -> addAll(
-                    allChapters.groupBy { it.jsonArray[4].jsonPrimitive.float }
-                        .map { (_: Float, versions: List<JsonArray>) -> versions.maxByOrNull { it[5].jsonPrimitive.float }!! }
-                )
-                else -> addAll(allChapters)
-            }
+        val releases = when (preferences.getString(PREF_CHAPTER_LISTING)) {
+            PREF_CHAPTER_LISTING_SHOW_POPULAR ->
+                chapterList.releases
+                    .groupBy { release -> release.chapterizationId }
+                    .mapNotNull { (_, releases) -> releases.maxByOrNull { it.views } }
+            PREF_CHAPTER_LISTING_SHOW_ALL -> chapterList.releases
+            else -> emptyList()
         }
 
-        return chapters.map {
+        return releases.map { release ->
             SChapter.create().apply {
-                chapter_number = it[8].jsonPrimitive.float
+                val chapter = chapterList.chapters.first { it.id == release.chapterizationId }
+                val team = chapterList.teams.firstOrNull { it.id == release.teamId }
 
-                val chapterName = it[10].jsonPrimitive.content.let { if (it.trim() != "") " - $it" else "" }
+                url = "/r/${release.id}"
+                chapter_number = chapter.chapter
+                date_upload = release.timestamp * 1000
+                scanlator = team?.name
 
-                url = "/r/${it[0]}"
+                val chapterName = chapter.title.let { if (it.trim() != "") " - $it" else "" }
                 name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
-                date_upload = it[2].jsonPrimitive.long * 1000
-                scanlator = it[13].jsonPrimitive.content
             }
-        }
+        }.sortedWith(compareBy({ -it.chapter_number }, { -it.date_upload }))
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
@@ -115,7 +109,7 @@ class Gmanga : ConfigurableSource, HttpSource() {
 
                     thumbnail_url = it.jsonObject["cover"]!!.jsonPrimitive.contentOrNull?.let { coverFileName ->
                         val thumbnail = "medium_${coverFileName.substringBeforeLast(".")}.webp"
-                        "https://media.$domain/uploads/manga/cover/${it.jsonObject["id"]!!.jsonPrimitive.content}/$thumbnail"
+                        "https://media.gmanga.me/uploads/manga/cover/${it.jsonObject["id"]!!.jsonPrimitive.content}/$thumbnail"
                     }
                 }
             },
@@ -148,7 +142,7 @@ class Gmanga : ConfigurableSource, HttpSource() {
             Page(
                 index,
                 "$url#page_$index",
-                "https://media.$domain/uploads/releases/${releaseData["storage_key"]!!.jsonPrimitive.content}/hq${if (hasWebP) "_webp" else ""}/$pageUri"
+                "https://media.gmanga.me/uploads/releases/${releaseData["storage_key"]!!.jsonPrimitive.content}/hq${if (hasWebP) "_webp" else ""}/$pageUri"
             )
         }
     }
@@ -166,7 +160,7 @@ class Gmanga : ConfigurableSource, HttpSource() {
                     url = "/mangas/${it.jsonObject["id"]!!.jsonPrimitive.content}"
                     title = it.jsonObject["title"]!!.jsonPrimitive.content
                     val thumbnail = "medium_${it.jsonObject["cover"]!!.jsonPrimitive.content.substringBeforeLast(".")}.webp"
-                    thumbnail_url = "https://media.$domain/uploads/manga/cover/${it.jsonObject["id"]!!.jsonPrimitive.content}/$thumbnail"
+                    thumbnail_url = "https://media.gmanga.me/uploads/manga/cover/${it.jsonObject["id"]!!.jsonPrimitive.content}/$thumbnail"
                 }
             },
             mangas.size == 50

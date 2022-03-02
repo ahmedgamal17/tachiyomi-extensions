@@ -3,12 +3,6 @@ apply plugin: 'org.jmailen.kotlinter'
 android {
     compileSdkVersion AndroidConfig.compileSdk
 
-    buildTypes {
-        release {
-            minifyEnabled false
-        }
-    }
-
     sourceSets {
         main {
             manifest.srcFile "AndroidManifest.xml"
@@ -30,12 +24,40 @@ android {
         versionCode extVersionCode
         versionName project.ext.properties.getOrDefault("libVersion", "1.2") + ".$extVersionCode"
         setProperty("archivesBaseName", "tachiyomi-$pkgNameSuffix-v$versionName")
+        def readmes = project.projectDir.listFiles({ File file ->
+            file.name.equals("README.md") ||
+            file.name.equals("CHANGELOG.md")
+        } as FileFilter)
+        def hasReadme = readmes != null && readmes.any { File file ->
+            file.name.startsWith("README")
+        }
+        def hasChangelog = readmes != null && readmes.any { File file ->
+            file.name.startsWith("CHANGELOG")
+        }
         manifestPlaceholders = [
                 appName : "Tachiyomi: $extName",
                 extClass: extClass,
                 extFactory: project.ext.properties.getOrDefault("extFactory", ""),
                 nsfw: project.ext.properties.getOrDefault("isNsfw", false) ? 1 : 0,
+                hasReadme: hasReadme ? 1 : 0,
+                hasChangelog: hasChangelog ? 1 : 0,
         ]
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file("signingkey.jks")
+            storePassword System.getenv("KEY_STORE_PASSWORD")
+            keyAlias System.getenv("ALIAS")
+            keyPassword System.getenv("KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
     }
 
     dependenciesInfo {
@@ -57,6 +79,7 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_1_8.toString()
+        freeCompilerArgs += "-Xopt-in=kotlinx.serialization.ExperimentalSerializationApi"
     }
 }
 
@@ -65,9 +88,9 @@ repositories {
 }
 
 dependencies {
-    implementation project(":core")
+    implementation(project(":core"))
+    compileOnly(libs.bundles.common)
 }
-apply from: "$rootDir/common-dependencies.gradle"
 
 preBuild.dependsOn(lintKotlin)
 lintKotlin.dependsOn(formatKotlin)

@@ -15,6 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.DecimalFormat
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -33,7 +34,15 @@ class Selfmanga : ParsedHttpSource() {
     private val rateLimitInterceptor = RateLimitInterceptor(2)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(rateLimitInterceptor).build()
+        .addNetworkInterceptor(rateLimitInterceptor)
+        .addNetworkInterceptor { chain ->
+            val originalRequest = chain.request()
+            val response = chain.proceed(originalRequest)
+            if (originalRequest.url.toString().contains(baseUrl) and (originalRequest.url.toString().contains("internal/redirect") or (response.code == 301)))
+                throw Exception("Манга переехала на другой адрес/ссылку!")
+            response
+        }
+        .build()
 
     override fun popularMangaSelector() = "div.tile"
 
@@ -98,7 +107,7 @@ class Selfmanga : ParsedHttpSource() {
         manga.title = document.select("h1.names .name").text()
         manga.author = infoElement.select("span.elem_author").first()?.text()
         manga.genre = infoElement.select("span.elem_genre").text().replace(" ,", ",")
-        manga.description = document.select("div.manga-description").text()
+        manga.description = document.select("div#tab-description  .manga-description").text()
         manga.status = parseStatus(infoElement.html())
         manga.thumbnail_url = infoElement.select("img").attr("data-full")
         return manga
@@ -106,8 +115,8 @@ class Selfmanga : ParsedHttpSource() {
 
     private fun parseStatus(element: String): Int = when {
         element.contains("Запрещена публикация произведения по копирайту") || element.contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
-        element.contains("<b>Сингл</b>") || element.contains("выпуск завершен") -> SManga.COMPLETED
-        element.contains("выпуск продолжается") -> SManga.ONGOING
+        element.contains("<b>Перевод:</b> продолжается") -> SManga.ONGOING
+        element.contains("<b>Сингл</b>") || element.contains(", завер") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
@@ -115,15 +124,19 @@ class Selfmanga : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlElement = element.select("a").first()
+        val chapterInf = element.select(".item-data").first()
         val urlText = urlElement.text()
 
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlElement.attr("href") + "?mtr=1")
+        chapter.setUrlWithoutDomain(urlElement.attr("href") + "?mtr=true") // mtr is 18+ skip
         if (urlText.endsWith(" новое")) {
             chapter.name = urlText.dropLast(6)
         } else {
             chapter.name = urlText
         }
+
+        chapter.chapter_number = chapterInf.attr("num").toFloat() / 10
+
         chapter.date_upload = element.select("td.hidden-xxs").last()?.text()?.let {
             try {
                 SimpleDateFormat("dd/MM/yy", Locale.US).parse(it)?.time ?: 0L
@@ -135,20 +148,18 @@ class Selfmanga : ParsedHttpSource() {
     }
 
     override fun prepareNewChapter(chapter: SChapter, manga: SManga) {
-        val basic = Regex("""\s*([0-9]+)(\s-\s)([0-9]+)\s*""")
         val extra = Regex("""\s*([0-9]+\sЭкстра)\s*""")
         val single = Regex("""\s*Сингл\s*""")
         when {
-            basic.containsMatchIn(chapter.name) -> {
-                basic.find(chapter.name)?.let {
-                    val number = it.groups[3]?.value!!
-                    chapter.chapter_number = number.toFloat()
-                }
+            extra.containsMatchIn(chapter.name) -> {
+                if (chapter.name.substringAfter("Экстра").trim().isEmpty())
+                    chapter.name = chapter.name.replaceFirst(" ", " - " + DecimalFormat("#,###.##").format(chapter.chapter_number).replace(",", ".") + " ")
             }
-            extra.containsMatchIn(chapter.name) -> // Extra chapters doesn't contain chapter number
-                chapter.chapter_number = -2f
-            single.containsMatchIn(chapter.name) -> // Oneshoots, doujinshi and other mangas with one chapter
-                chapter.chapter_number = 1f
+
+            single.containsMatchIn(chapter.name) -> {
+                if (chapter.name.substringAfter("Сингл").trim().isEmpty())
+                    chapter.name = DecimalFormat("#,###.##").format(chapter.chapter_number).replace(",", ".") + " " + chapter.name
+            }
         }
     }
 

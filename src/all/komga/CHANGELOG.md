@@ -1,3 +1,27 @@
+## 1.2.39
+
+Minimum Komga version required: `0.151.0`
+
+### Features
+
+* Prepend series name in front of books within readlists
+
+## 1.2.38
+
+Minimum Komga version required: `0.113.0`
+
+### Features
+
+* Add `README.md`
+
+## 1.2.37
+
+Minimum Komga version required: `0.113.0`
+
+### Features
+
+* In app link to `CHANGELOG.md`
+
 ## 1.2.36
 
 Minimum Komga version required: `0.113.0`

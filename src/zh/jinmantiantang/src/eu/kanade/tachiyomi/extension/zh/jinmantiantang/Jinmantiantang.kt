@@ -254,7 +254,7 @@ class Jinmantiantang : ConfigurableSource, ParsedHttpSource() {
 
     // 查询漫画状态和类别信息
     private fun selectDetailsStatusAndGenre(document: Document, index: Int): String {
-        var status = "2"
+        var status = "0"
         var genre = ""
         if (document.select("span[itemprop=genre] a").size == 0) {
             return if (index == 1) {
@@ -268,6 +268,9 @@ class Jinmantiantang : ConfigurableSource, ParsedHttpSource() {
             when (val vote: String = value.select("a").text()) {
                 "連載中" -> {
                     status = "1"
+                }
+                "完結" -> {
+                    status = "2"
                 }
                 else -> {
                     genre = "$genre$vote "
@@ -555,11 +558,11 @@ class Jinmantiantang : ConfigurableSource, ParsedHttpSource() {
             "中国大陆总站", "中国大陆分流1", "中国大陆分流2"
         )
         private val SITE_ENTRIES_ARRAY_VALUE = (0..4).map { i -> i.toString() }.toTypedArray()
-        // List is based on https://jmcomic1.one/
+        // List is based on https://jmcomic.bet/
         // Please also update AndroidManifest
         private val SITE_ENTRIES_ARRAY = arrayOf(
             DEFAULT_SITE, "18comic.org",
-            "jmcomic1.cc", "jmcomic2.cc", "jmcomic3.cc"
+            "jmcomic4.cc", "jmcomic5.cc", "jmcomic5.cc"
         )
     }
 }

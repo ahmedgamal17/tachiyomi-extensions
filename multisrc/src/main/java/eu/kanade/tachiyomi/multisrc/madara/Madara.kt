@@ -36,7 +36,7 @@ import kotlin.random.Random
 abstract class Madara(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String,
+    final override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 ) : ParsedHttpSource() {
 
@@ -59,7 +59,7 @@ abstract class Madara(
     // Popular Manga
 
     // exclude/filter bilibili manga from list
-    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))"
+    override fun popularMangaSelector() = "div.page-item-detail.manga:not(:has(a[href*='bilibilicomics.com']))"
 
     open val popularMangaUrlSelector = "div.post-title a"
 
@@ -222,42 +222,110 @@ abstract class Madara(
         return GET(url.toString(), headers)
     }
 
-    protected class AuthorFilter : Filter.Text("Author")
-    protected class ArtistFilter : Filter.Text("Artist")
-    protected class YearFilter : Filter.Text("Year of Released")
-    protected class StatusFilter(status: List<Tag>) : Filter.Group<Tag>("Status", status)
+    protected open val authorFilterTitle: String = when (lang) {
+        "pt-BR" -> "Autor"
+        else -> "Author"
+    }
 
-    protected class OrderByFilter : UriPartFilter(
-        "Order By",
-        arrayOf(
-            Pair("<select>", ""),
-            Pair("Latest", "latest"),
-            Pair("A-Z", "alphabet"),
-            Pair("Rating", "rating"),
-            Pair("Trending", "trending"),
-            Pair("Most Views", "views"),
-            Pair("New", "new-manga")
-        )
+    protected open val artistFilterTitle: String = when (lang) {
+        "pt-BR" -> "Artista"
+        else -> "Artist"
+    }
+
+    protected open val yearFilterTitle: String = when (lang) {
+        "pt-BR" -> "Ano de lançamento"
+        else -> "Year of Released"
+    }
+
+    protected open val statusFilterTitle: String = when (lang) {
+        "pt-BR" -> "Estado"
+        else -> "Status"
+    }
+
+    protected open val statusFilterOptions: Array<String> = when (lang) {
+        "pt-BR" -> arrayOf("Completo", "Em andamento", "Cancelado", "Pausado")
+        else -> arrayOf("Completed", "Ongoing", "Canceled", "On Hold")
+    }
+
+    protected val statusFilterOptionsValues: Array<String> = arrayOf(
+        "end", "on-going", "canceled", "on-hold"
     )
 
-    protected class GenreConditionFilter : UriPartFilter(
-        "Genre condition",
-        arrayOf(
-            Pair("or", ""),
-            Pair("and", "1")
+    protected open val orderByFilterTitle: String = when (lang) {
+        "pt-BR" -> "Ordenar por"
+        else -> "Order By"
+    }
+
+    protected open val orderByFilterOptions: Array<String> = when (lang) {
+        "pt-BR" -> arrayOf(
+            "<selecione>", "Recentes", "A-Z", "Avaliação",
+            "Tendência", "Visualizações", "Novos"
         )
+        else -> arrayOf(
+            "<select>", "Latest", "A-Z", "Rating",
+            "Trending", "Most Views", "New"
+        )
+    }
+
+    protected val orderByFilterOptionsValues: Array<String> = arrayOf(
+        "", "latest", "alphabet", "rating", "trending", "views", "new-manga"
     )
 
-    protected class AdultContentFilter : UriPartFilter(
-        "Adult Content",
-        arrayOf(
-            Pair("All", ""),
-            Pair("None", "0"),
-            Pair("Only", "1")
-        )
+    protected open val genreConditionFilterTitle: String = when (lang) {
+        "pt-BR" -> "Operador dos gêneros"
+        else -> "Genre condition"
+    }
+
+    protected open val genreConditionFilterOptions: Array<String> = when (lang) {
+        "pt-BR" -> arrayOf("OU", "E")
+        else -> arrayOf("OR", "AND")
+    }
+
+    protected open val adultContentFilterTitle: String = when (lang) {
+        "pt-BR" -> "Conteúdo adulto"
+        else -> "Adult Content"
+    }
+
+    protected open val adultContentFilterOptions: Array<String> = when (lang) {
+        "pt-BR" -> arrayOf("Indiferente", "Nenhum", "Somente")
+        else -> arrayOf("All", "None", "Only")
+    }
+
+    protected open val genreFilterHeader: String = when (lang) {
+        "pt-BR" -> "O filtro de gêneros pode não funcionar em algumas fontes"
+        else -> "Genres filter may not work for all sources"
+    }
+
+    protected open val genreFilterTitle: String = when (lang) {
+        "pt-BR" -> "Gêneros"
+        else -> "Genres"
+    }
+
+    protected open val genreFilterResetWarning: String = when (lang) {
+        "pt-BR" -> "Aperte redefinir para tentar carregar os gêneros"
+        else -> "Press reset to attempt to fetch genres"
+    }
+
+    protected class AuthorFilter(title: String) : Filter.Text(title)
+    protected class ArtistFilter(title: String) : Filter.Text(title)
+    protected class YearFilter(title: String) : Filter.Text(title)
+    protected class StatusFilter(title: String, status: List<Tag>) :
+        Filter.Group<Tag>(title, status)
+
+    protected class OrderByFilter(title: String, options: List<Pair<String, String>>) :
+        UriPartFilter(title, options.toTypedArray())
+
+    protected class GenreConditionFilter(title: String, options: Array<String>) : UriPartFilter(
+        title,
+        options.zip(arrayOf("", "1")).toTypedArray()
     )
 
-    protected class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
+    protected class AdultContentFilter(title: String, options: Array<String>) : UriPartFilter(
+        title,
+        options.zip(arrayOf("", "0", "1")).toTypedArray()
+    )
+
+    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
     class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 
     private var genresList: List<Genre>? = null
@@ -266,28 +334,25 @@ abstract class Madara(
         // Filters are fetched immediately once an extension loads
         // We're only able to get filters after a loading the manga directory, and resetting
         // the filters is the only thing that seems to reinflate the view
-        return genresList ?: listOf(Genre("Press reset to attempt to fetch genres", ""))
+        return genresList ?: listOf(Genre(genreFilterResetWarning, ""))
     }
 
     override fun getFilterList() = FilterList(
-        AuthorFilter(),
-        ArtistFilter(),
-        YearFilter(),
-        StatusFilter(getStatusList()),
-        OrderByFilter(),
-        AdultContentFilter(),
+        AuthorFilter(authorFilterTitle),
+        ArtistFilter(artistFilterTitle),
+        YearFilter(yearFilterTitle),
+        StatusFilter(statusFilterTitle, getStatusList()),
+        OrderByFilter(orderByFilterTitle, orderByFilterOptions.zip(orderByFilterOptionsValues)),
+        AdultContentFilter(adultContentFilterTitle, adultContentFilterOptions),
         Filter.Separator(),
-        Filter.Header("Genres may not work for all sources"),
-        GenreConditionFilter(),
-        GenreList(getGenreList())
+        Filter.Header(genreFilterHeader),
+        GenreConditionFilter(genreConditionFilterTitle, genreConditionFilterOptions),
+        GenreList(genreFilterTitle, getGenreList())
     )
 
-    protected fun getStatusList() = listOf(
-        Tag("end", "Completed"),
-        Tag("on-going", "Ongoing"),
-        Tag("canceled", "Canceled"),
-        Tag("on-hold", "On Hold")
-    )
+    protected fun getStatusList() = statusFilterOptionsValues
+        .zip(statusFilterOptions)
+        .map { Tag(it.first, it.second) }
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
@@ -317,6 +382,16 @@ abstract class Madara(
     override fun searchMangaNextPageSelector(): String? = "div.nav-previous, nav.navigation-ajax, a.nextpostslink"
 
     // Manga Details Parse
+
+    protected val completedStatusList: Array<String> = arrayOf(
+        "Completed", "Completo", "Concluído", "Concluido", "Terminé", "Hoàn Thành"
+    )
+
+    protected val ongoingStatusList: Array<String> = arrayOf(
+        "OnGoing", "Продолжается", "Updating", "Em Lançamento", "Em andamento", "Em Andamento",
+        "En cours", "Ativo", "Lançando", "Đang Tiến Hành", "Devam Ediyor", "Devam ediyor",
+        "In Corso", "In Arrivo"
+    )
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
@@ -350,8 +425,8 @@ abstract class Madara(
                 manga.status = when (it.text()) {
                     // I don't know what's the corresponding for COMPLETED and LICENSED
                     // There's no support for "Canceled" or "On Hold"
-                    "Completed", "Completo", "Concluído", "Concluido", "Terminé" -> SManga.COMPLETED
-                    "OnGoing", "Продолжается", "Updating", "Em Lançamento", "Em andamento", "Em Andamento", "En cours", "Ativo", "Lançando" -> SManga.ONGOING
+                    in completedStatusList -> SManga.COMPLETED
+                    in ongoingStatusList -> SManga.ONGOING
                     else -> SManga.UNKNOWN
                 }
             }
@@ -392,18 +467,21 @@ abstract class Madara(
     }
 
     // Manga Details Selector
-    open val mangaDetailsSelectorTitle = "div.post-title h3"
+    open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1"
     open val mangaDetailsSelectorAuthor = "div.author-content > a"
     open val mangaDetailsSelectorArtist = "div.artist-content > a"
     open val mangaDetailsSelectorStatus = "div.summary-content"
-    open val mangaDetailsSelectorDescription = "div.description-summary div.summary__content"
+    open val mangaDetailsSelectorDescription = "div.description-summary div.summary__content, div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
     open val mangaDetailsSelectorThumbnail = "div.summary_image img"
     open val mangaDetailsSelectorGenre = "div.genres-content a"
     open val mangaDetailsSelectorTag = "div.tags-content a"
 
     open val seriesTypeSelector = ".post-content_item:contains(Type) .summary-content"
     open val altNameSelector = ".post-content_item:contains(Alt) .summary-content"
-    open val altName = "Alternative Name" + ": "
+    open val altName = when (lang) {
+        "pt-BR" -> "Nomes alternativos: "
+        else -> "Alternative Names: "
+    }
     open val updatingRegex = "Updating|Atualizando".toRegex(RegexOption.IGNORE_CASE)
 
     public fun String.notUpdating(): Boolean {
@@ -509,9 +587,9 @@ abstract class Madara(
             }
             // Dates can be part of a "new" graphic or plain text
             // Added "title" alternative
-            chapter.date_upload = select("img").firstOrNull()?.attr("alt")?.let { parseRelativeDate(it) }
+            chapter.date_upload = select("img:not(.thumb)").firstOrNull()?.attr("alt")?.let { parseRelativeDate(it) }
                 ?: select("span a").firstOrNull()?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate(select("span.chapter-release-date i").firstOrNull()?.text())
+                ?: parseChapterDate(select("span.chapter-release-date").firstOrNull()?.text())
         }
 
         return chapter
@@ -529,19 +607,8 @@ abstract class Madara(
         }
 
         return when {
-            date.endsWith(" ago", ignoreCase = true) -> {
-                parseRelativeDate(date)
-            }
-            // Handle translated 'ago' in Portuguese.
-            date.endsWith(" atrás", ignoreCase = true) -> {
-                parseRelativeDate(date)
-            }
-            // Handle translated 'ago' in Turkish.
-            date.endsWith(" önce", ignoreCase = true) -> {
-                parseRelativeDate(date)
-            }
             // Handle 'yesterday' and 'today', using midnight
-            date.startsWith("year", ignoreCase = true) -> {
+            WordSet("yesterday", "يوم واحد").startsWith(date) -> {
                 Calendar.getInstance().apply {
                     add(Calendar.DAY_OF_MONTH, -1) // yesterday
                     set(Calendar.HOUR_OF_DAY, 0)
@@ -550,13 +617,25 @@ abstract class Madara(
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
             }
-            date.startsWith("today", ignoreCase = true) -> {
+            WordSet("today").startsWith(date) -> {
                 Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0)
                     set(Calendar.MINUTE, 0)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+            }
+            WordSet("يومين").startsWith(date) -> {
+                Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+            }
+            WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
+                parseRelativeDate(date)
             }
             date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
                 // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
@@ -580,10 +659,11 @@ abstract class Madara(
         val cal = Calendar.getInstance()
 
         return when {
-            WordSet("hari", "gün", "jour", "día", "dia", "day", "วัน").anyWordIn(date) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            WordSet("jam", "saat", "heure", "hora", "hour", "ชั่วโมง").anyWordIn(date) -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            WordSet("menit", "dakika", "min", "minute", "minuto", "นาที").anyWordIn(date) -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            WordSet("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام").anyWordIn(date) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+            WordSet("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة").anyWordIn(date) -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            WordSet("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").anyWordIn(date) -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
             WordSet("detik", "segundo", "second", "วินาที").anyWordIn(date) -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            WordSet("week").anyWordIn(date) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
             WordSet("month").anyWordIn(date) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
             WordSet("year").anyWordIn(date) -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
             else -> 0
@@ -617,7 +697,7 @@ abstract class Madara(
         return GET(page.imageUrl!!, headers.newBuilder().set("Referer", page.url).build())
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = ""
 
     /**
      * Set it to false if you want to disable the extension reporting the view count
@@ -680,4 +760,8 @@ abstract class Madara(
     }
 }
 
-class WordSet(private vararg val words: String) { fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) } }
+class WordSet(private vararg val words: String) {
+    fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
+    fun startsWith(dateString: String): Boolean = words.any { dateString.startsWith(it, ignoreCase = true) }
+    fun endsWith(dateString: String): Boolean = words.any { dateString.endsWith(it, ignoreCase = true) }
+}

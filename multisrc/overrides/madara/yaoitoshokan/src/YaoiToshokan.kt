@@ -2,8 +2,11 @@ package eu.kanade.tachiyomi.extension.pt.yaoitoshokan
 
 import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
+import okhttp3.Headers
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -11,12 +14,15 @@ import java.util.concurrent.TimeUnit
 
 class YaoiToshokan : Madara(
     "Yaoi Toshokan",
-    "https://yaoitoshokan.net",
+    "https://www.yaoitoshokan.net",
     "pt-BR",
     SimpleDateFormat("dd MMM yyyy", Locale("pt", "BR"))
 ) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .removeAll("User-Agent")
+
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(RateLimitInterceptor(1, 2, TimeUnit.SECONDS))
         .build()
 
@@ -24,61 +30,28 @@ class YaoiToshokan : Madara(
     override val popularMangaUrlSelector = "div.post-title a:not([target])"
 
     override fun pageListParse(document: Document): List<Page> {
+        countViews(document)
+
         return document.select(pageListParseSelector)
             .mapIndexed { index, element ->
                 // Had to add trim because of white space in source.
                 val imageUrl = element.select("img").attr("data-src").trim()
-                Page(index, document.location(), imageUrl)
+                Page(index, "$baseUrl/", imageUrl)
             }
     }
 
-    // [...document.querySelectorAll('input[name="genre[]"]')]
-    //   .map(x => `Genre("${document.querySelector('label[for=' + x.id + ']').innerHTML.trim()}", "${x.value}")`)
-    //   .join(',\n')
-    override fun getGenreList(): List<Genre> = listOf(
-        Genre("Ação", "acao"),
-        Genre("Adulto", "adulto"),
-        Genre("Bara", "bara"),
-        Genre("BDSM", "bdsm"),
-        Genre("Comédia", "comedia"),
-        Genre("Comic", "comic"),
-        Genre("Cotidiano", "cotidiano"),
-        Genre("Crossdress", "gender-bender"),
-        Genre("Doujinshi", "doujinshi"),
-        Genre("Drama", "drama"),
-        Genre("Ecchi", "ecchi"),
-        Genre("Esportes", "esportes"),
-        Genre("Fantasia", "fantasia"),
-        Genre("Fury", "fury"),
-        Genre("Futanari", "futanari"),
-        Genre("Gender Bender", "gender-bender-2"),
-        Genre("Histórico", "historico"),
-        Genre("Horror", "horror"),
-        Genre("Incesto", "incesto"),
-        Genre("Mafia", "mafia"),
-        Genre("Manga", "manga"),
-        Genre("Manhua", "manhua"),
-        Genre("Manhwa", "manhwa"),
-        Genre("Mistério", "misterio"),
-        Genre("Mpreg", "mpreg"),
-        Genre("Omegaverse", "omegaverse"),
-        Genre("One shot", "one-shot"),
-        Genre("Poliamor", "poliamor"),
-        Genre("Psicológico", "psicologico"),
-        Genre("Romance", "romance"),
-        Genre("Salaryman", "salaryman"),
-        Genre("Sci-fi", "sci-fi"),
-        Genre("Seinen", "seinen"),
-        Genre("Shocaton", "shocaton"),
-        Genre("Shoujo", "shoujo"),
-        Genre("Shoujo Ai", "shoujo-ai"),
-        Genre("Shounen", "shounen"),
-        Genre("Shounen Ai", "shounen-ai"),
-        Genre("Smut", "smut"),
-        Genre("Sobrenatural", "sobrenatural"),
-        Genre("Tragédia", "tragedia"),
-        Genre("Vampiros", "vampiros"),
-        Genre("Vida Escolar", "vida-escolar"),
-        Genre("Yaoi", "yaoi")
-    )
+    override fun imageRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .add("Accept", ACCEPT_IMAGE)
+            .add("Accept-Language", ACCEPT_LANGUAGE)
+            .set("Referer", page.url)
+            .build()
+
+        return GET(page.imageUrl!!, newHeaders)
+    }
+
+    companion object {
+        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+        private const val ACCEPT_LANGUAGE = "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,es;q=0.6,gl;q=0.5"
+    }
 }

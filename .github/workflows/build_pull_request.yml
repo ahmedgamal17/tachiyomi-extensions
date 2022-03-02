@@ -2,6 +2,8 @@ name: PR build check
 
 on:
   pull_request:
+    paths-ignore:
+      - '**.md'
 
 jobs:
   check_wrapper:
@@ -41,6 +43,7 @@ jobs:
           CI_MULTISRC: "true"
         with:
           arguments: :multisrc:generateExtensions
+          cache-read-only: true
 
       - name: Build "${{ matrix.lang }}" extensions
         uses: gradle/gradle-command-action@v2
@@ -48,7 +51,8 @@ jobs:
           CI_MULTISRC: "true"
           CI_MATRIX_LANG: ${{ matrix.lang }}
         with:
-          arguments: assembleRelease
+          arguments: assembleDebug
+          cache-read-only: true
 
   build_individual:
     name: Build individual modules
@@ -77,4 +81,5 @@ jobs:
           CI_MULTISRC: "false"
           CI_MATRIX_LANG: ${{ matrix.lang }}
         with:
-          arguments: assembleRelease
+          arguments: assembleDebug
+          cache-read-only: true
