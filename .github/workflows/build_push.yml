@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload "${{ matrix.lang }}" APKs
         uses: actions/upload-artifact@v2
-        if: "github.repository == 'tachiyomiorg/tachiyomi-extensions'"
+        if: "github.repository == 'ahmedgamal17/tachiyomi-extensions'"
         with:
           name: "multisrc-${{ matrix.lang }}-apks"
           path: "**/*.apk"
@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload "${{ matrix.lang }}" APKs
         uses: actions/upload-artifact@v2
-        if: "github.repository == 'tachiyomiorg/tachiyomi-extensions'"
+        if: "github.repository == 'ahmedgamal17/tachiyomi-extensions'"
         with:
           name: "individual-${{ matrix.lang }}-apks"
           path: "**/*.apk"
@@ -124,7 +124,7 @@ jobs:
     needs:
       - build_multisrc
       - build_individual
-    if: "github.repository == 'tachiyomiorg/tachiyomi-extensions'"
+    if: "github.repository == 'ahmedgamal17/tachiyomi-extensions'"
     runs-on: ubuntu-latest
     steps:
       - name: Download APK artifacts
