@@ -28,6 +28,10 @@ import uy.kohesive.injekt.injectLazy
 class TeamX : ParsedHttpSource() {
 
     override val name = "TeamX"
+    
+    private val defaultBaseUrl = "https://teamx.fun"
+
+    private val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_NAME}"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
     //override val baseUrl = "http://teamxmanga.com"
@@ -45,16 +49,35 @@ class TeamX : ParsedHttpSource() {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(ADDRESS_TITLE, ADDRESS_DEFAULT)!!
+    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF_TITLE
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            this.setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val res = preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
+                    res
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+        }
+
+        screen.addPreference(baseUrlPref)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     companion object {
-        private const val ADDRESS_TITLE = "Site URL Address"
-        private const val ADDRESS_DEFAULT = ""
+        private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
+        private const val BASE_URL_PREF_SUMMARY = "Override default domain with a different one"
     }
-    
-    private val checkedBaseUrl: String
-        get(): String = if (baseUrl.isNotEmpty()) baseUrl
-        else throw RuntimeException("Set Site url in extension settings")
 
     // Decreases calls, helps with Cloudflare
     private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this
