@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.teamx
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.widget.Toast
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
