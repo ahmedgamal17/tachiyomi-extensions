@@ -144,7 +144,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
             thumbnail_url = document.select("div.thumb > img").attr("src")
 
-            author = document.select("div.container > div:nth-child(1) > div:nth-child(2) > div:nth-child(6) > a").firstOrNull()?.ownText()
+            author = document.select("div.genre:contains(الفريق) > a").firstOrNull()?.ownText()
             artist = author
 
             genre = document.select("div.container > div:nth-child(1) > div:nth-child(2) > div:nth-child(5) > a").joinToString(", ") { it.text() }
