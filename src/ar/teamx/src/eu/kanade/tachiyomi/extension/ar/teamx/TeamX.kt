@@ -27,7 +27,7 @@ import uy.kohesive.injekt.injectLazy
 class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "TeamX"
-    
+
     override val baseUrl: String by lazy { getPrefBaseUrl()!!.removeSuffix("/") }
     //override val baseUrl = "http://teamxmanga.com"
 
@@ -46,42 +46,43 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga/page/$page/")
+        return GET("$baseUrl/series?page=$page")
     }
 
-    override fun popularMangaSelector() = "div > div.last-post-manga"
+    override fun popularMangaSelector() = "div.bs > div.bsx"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("a").let {
                 setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+                title = it.attr("title")
             }
-            element.select("div.thumb").let {
-                title = element.select("h3").text()
+            element.select("div.limit").let {
                 thumbnail_url = element.select("img").attr("abs:src")
             }
         }
     }
 
-    override fun popularMangaNextPageSelector() = "div.wp-pagenavi > span.next_text > a"
+    override fun popularMangaNextPageSelector() = "a[rel=next]"
 
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/last-chapters/page/$page/")
+        return GET("$baseUrl/?page=$page")
     }
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun latestUpdatesSelector() = "div.box div.uta"
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
-            element.select("a").let {
+            element.select("div.imgu a").let {
                 setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+                thumbnail_url = it.select("img").attr("src")
+                title = element.select("img").attr("alt")
             }
-            thumbnail_url = element.attr("style").substringAfter("url('").substringBefore("')")
-            element.select("div.thumb").let {
+            /*element.select("div.thumb").let {
                 title = element.select("h5").text()
-            }
+            }*/
         }
     }
 
@@ -91,25 +92,25 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/page/$page/?s=$query")
+            GET("$baseUrl/series?search=$query&page=$page")
         } else {
-            val url = "$baseUrl/manga/page/$page/?".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/series?page=$page".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
                 when (filter) {
                     is StatusFilter -> {
                         filter.state
                             .filter { it.state != Filter.TriState.STATE_IGNORE }
-                            .forEach { url.addQueryParameter("st", it.id) }
+                            .forEach { url.addQueryParameter("status", it.id) }
                     }
                     is TypeFilter -> {
                         filter.state
                             .filter { it.state != Filter.TriState.STATE_IGNORE }
-                            .forEach { url.addQueryParameter("ty", it.id) }
+                            .forEach { url.addQueryParameter("type", it.id) }
                     }
                     is GenreFilter -> {
                         filter.state
                             .filter { it.state != Filter.TriState.STATE_IGNORE }
-                            .forEach { url.addQueryParameter("ge", it.id) }
+                            .forEach { url.addQueryParameter("genre", it.id) }
                     }
                 }
             }
@@ -122,13 +123,12 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("a").let {
-                setUrlWithoutDomain(it.attr("abs:href"))
+                setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+                title = it.attr("title")
             }
-            element.select("div.thumb").let {
-                title = element.select("div.info > h5 > a, div.info > h3 > a").text()
-                // thumbnail_url = element.select("img").attr("abs:src") + element.attr("style").substringAfter("background-image: url('").substringBeforeLast("')")
+            element.select("div.limit").let {
+                thumbnail_url = element.select("img").attr("abs:src")
             }
-            thumbnail_url = element.select("div.thumb img").attr("abs:src") + element.attr("style").substringAfter("background-image: url('").substringBeforeLast("')")
         }
     }
 
@@ -138,19 +138,19 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            document.select("div.story").first().let { info ->
+            document.select("div.review-content").first().let { info ->
                 description = info.select("p").text()
             }
 
-            thumbnail_url = document.select("div.thumb > img").attr("src")
+            thumbnail_url = document.select("img[alt=Manga Image]").attr("src")
 
-            author = document.select("div.genre:contains(الفريق) > a").firstOrNull()?.ownText()
+            author = document.select("div.full-list-info:contains(الرسام) > small > a").firstOrNull()?.ownText()
             artist = author
 
-            genre = document.select("div.container > div:nth-child(1) > div:nth-child(2) > div:nth-child(5) > a").joinToString(", ") { it.text() }
+            genre = document.select("div.review-author-info > a, div.full-list-info:contains(النوع) > small > a").joinToString(", ") { it.text() }
 
             // add series Status to manga description
-            document.select("div.container > div:nth-child(1) > div:nth-child(2) > div:nth-child(4) > a")?.first()?.text()?.also { statusText ->
+            document.select("div.full-list-info:contains(الحالة) > small > a")?.first()?.text()?.also { statusText ->
                 when {
                     statusText.contains("مستمرة", true) -> status = SManga.ONGOING
                     statusText.contains("مكتملة", true) -> status = SManga.COMPLETED
@@ -162,9 +162,9 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     // Chapters
 
-    override fun chapterListSelector() = "div.single-manga-chapter > div.container > div > div > a"
+    override fun chapterListSelector() = "div.eplisterfull > ul > li > a"
 
-    private fun chapterNextPageSelector() = "div.wp-pagenavi > span.nextx_text > a"
+    private fun chapterNextPageSelector() = "a[rel=next]"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -183,14 +183,14 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href").addTrailingSlash())
-            name = "${element.text()}"
+            name = element.select("div.epl-title").text()
         }
     }
 
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#translationPageall embed[src*=content]").mapIndexed { i, img ->
+        return document.select("div.reading-content div.page-break img[src*=uploads]").mapIndexed { i, img ->
             Page(i, "", img.attr("abs:src"))
         }
     }
@@ -299,9 +299,9 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         Status("برومو", "1778"),
         Status("ون شوت", "2306")
     )
-    
+
     //settings
-    
+
     companion object {
         const val DEFAULT_BASEURL = "https://teamx.fun"
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
@@ -309,7 +309,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Update extension will erase this setting."
         private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
     }
-    
+
      private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
