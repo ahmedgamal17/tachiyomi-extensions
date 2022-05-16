@@ -173,7 +173,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         fun addChapters(document: Document) {
             document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
             document.select("${chapterNextPageSelector()}").firstOrNull()
-                ?.let { addChapters(client.newCall(GET(it.attr("href").addTrailingSlash())).execute().asJsoup()) }
+                ?.let { addChapters(client.newCall(GET(it.attr("href"))).execute().asJsoup()) }
         }
 
         addChapters(response.asJsoup())
