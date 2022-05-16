@@ -40,8 +40,8 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    // Decreases calls, helps with Cloudflare
-    private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this
+    /* Decreases calls, helps with Cloudflare
+    private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this*/
 
     // Popular
 
@@ -54,7 +54,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("a").let {
-                setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+                setUrlWithoutDomain(it.attr("abs:href"))
                 title = it.attr("title")
             }
             element.select("div.limit").let {
@@ -76,7 +76,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("div.imgu a").let {
-                setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+                setUrlWithoutDomain(it.attr("abs:href"))
                 thumbnail_url = it.select("img").attr("src")
                 title = element.select("img").attr("alt")
             }
@@ -123,7 +123,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("a").let {
-                setUrlWithoutDomain(it.attr("abs:href").addTrailingSlash())
+                setUrlWithoutDomain(it.attr("abs:href"))
                 title = it.attr("title")
             }
             element.select("div.limit").let {
@@ -182,7 +182,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href").addTrailingSlash())
+            setUrlWithoutDomain(element.attr("href"))
             name = element.select("div.epl-title").text()
         }
     }
