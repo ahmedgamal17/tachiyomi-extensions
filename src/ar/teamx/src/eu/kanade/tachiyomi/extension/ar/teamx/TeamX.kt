@@ -164,7 +164,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override fun chapterListSelector() = "div.eplisterfull > ul > li > a"
 
-    private fun chapterNextPageSelector() = "a[rel=next]"
+    private fun chapterNextPageSelector() = "ul.pagination li:last-child a"//"a[rel=next]"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -173,7 +173,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         fun addChapters(document: Document) {
             document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
             document.select("${chapterNextPageSelector()}").firstOrNull()
-                ?.let { addChapters(client.newCall(GET(it.attr("abs:href").addTrailingSlash())).execute().asJsoup()) }
+                ?.let { addChapters(client.newCall(GET(it.attr("href").addTrailingSlash())).execute().asJsoup()) }
         }
 
         addChapters(response.asJsoup())
