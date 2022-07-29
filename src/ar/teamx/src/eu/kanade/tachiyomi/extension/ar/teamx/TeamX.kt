@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,23 +14,24 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
 import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.TimeUnit
 
 class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "TeamX"
 
     override val baseUrl: String by lazy { getPrefBaseUrl()!!.removeSuffix("/") }
-    //override val baseUrl = "http://teamxmanga.com"
+    // override val baseUrl = "http://teamxmanga.com"
 
     override val lang = "ar"
 
@@ -38,6 +40,10 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    private val postHeaders = headers.newBuilder()
+        .add("Referer", "$baseUrl/")
         .build()
 
     /* Decreases calls, helps with Cloudflare
@@ -91,8 +97,11 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val pageData = FormBody.Builder()
+            .add("keyword", "$query")
+            .build()
         return if (query.isNotBlank()) {
-            GET("$baseUrl/series?search=$query&page=$page")
+            POST("https://mnhaestate.com/ajax/search", postHeaders, pageData)
         } else {
             val url = "$baseUrl/series?page=$page".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
@@ -118,17 +127,16 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaSelector() = "div.bs > div.bsx, div.image-parent"
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("a").let {
                 setUrlWithoutDomain(it.attr("abs:href"))
-                title = it.attr("title")
+                title = it.attr("href").substringAfterLast("/").replace("-", " ")
             }
-            element.select("div.limit").let {
-                thumbnail_url = element.select("img").attr("abs:src")
-            }
+
+            thumbnail_url = element.select("img").attr("abs:src")
         }
     }
 
@@ -164,7 +172,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override fun chapterListSelector() = "div.eplisterfull > ul > li > a"
 
-    private fun chapterNextPageSelector() = "ul.pagination li:last-child a"//"a[rel=next]"
+    private fun chapterNextPageSelector() = "ul.pagination li:last-child a" // "a[rel=next]"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -300,17 +308,17 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         Status("ون شوت", "2306")
     )
 
-    //settings
+    // settings
 
     companion object {
-        const val DEFAULT_BASEURL = "https://teamx.fun"
+        const val DEFAULT_BASEURL = "https://mnhaestate.com"
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
         private val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_NAME}"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Update extension will erase this setting."
         private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
     }
 
-     private val preferences: SharedPreferences by lazy {
+    private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
