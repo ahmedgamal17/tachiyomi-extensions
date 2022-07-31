@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.ar.teamx
 import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
-import eu.kanade.tachiyomi.BuildConfig
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -313,7 +313,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     companion object {
         const val DEFAULT_BASEURL = "https://mnhaestate.com"
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_NAME}"
+        private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Update extension will erase this setting."
         private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
     }
