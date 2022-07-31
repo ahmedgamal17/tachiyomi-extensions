@@ -2,10 +2,10 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 ext {
-    extName =  'Team X'
+    extName =  'TeamX'
     pkgNameSuffix = 'ar.teamx'
     extClass = '.TeamX'
-    extVersionCode = 9
+    extVersionCode = 10
 }
 
 apply from: "$rootDir/common.gradle"

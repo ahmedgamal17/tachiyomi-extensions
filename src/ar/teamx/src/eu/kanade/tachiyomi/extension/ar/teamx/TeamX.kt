@@ -44,10 +44,6 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val postHeaders = headers.newBuilder()
-        .add("Referer", "$baseUrl/")
-        .build()
-
     /* Decreases calls, helps with Cloudflare
     private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this*/
 
@@ -99,6 +95,9 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val postHeaders = headers.newBuilder()
+            .add("Referer", "$baseUrl/")
+            .build()
         val pageData = FormBody.Builder()
             .add("keyword", "$query")
             .build()
