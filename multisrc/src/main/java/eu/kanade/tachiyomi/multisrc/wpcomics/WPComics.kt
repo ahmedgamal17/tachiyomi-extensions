@@ -93,7 +93,7 @@ abstract class WPComics(
                 addQueryParameter("sort", "0")
             }
 
-            GET(url.toString().replace("www.nettruyen.com/tim-truyen?status=2&", "www.nettruyen.com/truyen-full?"), headers)
+            GET(url.toString().replace("www.nettruyenme.com/tim-truyen?status=2&", "www.nettruyenme.com/truyen-full?"), headers)
         }
     }
 

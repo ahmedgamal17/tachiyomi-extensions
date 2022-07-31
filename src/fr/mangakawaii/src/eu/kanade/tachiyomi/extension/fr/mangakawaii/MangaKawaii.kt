@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.mangakawaii
 
 import android.net.Uri
-import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -16,6 +16,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
@@ -27,16 +28,15 @@ import kotlin.random.Random
 class MangaKawaii : ParsedHttpSource() {
 
     override val name = "Mangakawaii"
-    override val baseUrl = "https://www.mangakawaii.net"
-    val cdnUrl = "https://cdn.mangakawaii.net"
+    override val baseUrl = "https://www.mangakawaii.io"
+    val cdnUrl = "https://cdn.mangakawaii.pics"
     override val lang = "fr"
     override val supportsLatest = true
-    private val rateLimitInterceptor = RateLimitInterceptor(1) // 1 request per second
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .addNetworkInterceptor(rateLimitInterceptor)
+        .rateLimit(2)
         .build()
 
     protected open val userAgentRandomizer1 = "${Random.nextInt(9).absoluteValue}"
@@ -79,10 +79,11 @@ class MangaKawaii : ParsedHttpSource() {
         val uri = Uri.parse("$baseUrl/search").buildUpon()
             .appendQueryParameter("query", query)
             .appendQueryParameter("search_type", "manga")
+            .appendQueryParameter("page", page.toString())
         return GET(uri.toString(), headers)
     }
-    override fun searchMangaSelector() = "h2 + ul a[href*=manga]"
-    override fun searchMangaNextPageSelector(): String? = null
+    override fun searchMangaSelector() = "div.section__list-group-heading"
+    override fun searchMangaNextPageSelector(): String = "ul.pagination a[rel*=next]"
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.select("a").text().trim()
         setUrlWithoutDomain(element.select("a").attr("href"))
@@ -101,6 +102,16 @@ class MangaKawaii : ParsedHttpSource() {
             "Terminé" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+
+        // add alternative name to manga description
+        document.select("span[itemprop=name alternativeHeadline]").joinToString { it.ownText() }.let {
+            if (it.isNotBlank()) {
+                description = when {
+                    description.isNullOrBlank() -> "Alternative Names: $it"
+                    else -> "$description\n\nAlternative Names: $it"
+                }
+            }
+        }
     }
 
     // Chapter list
@@ -109,31 +120,45 @@ class MangaKawaii : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        var mangaDocument = document
-        val visibleChapters = document.select(".table__chapter>a")
+        val visibleChapters = document.select("tr[class*='volume-']")
         if (!visibleChapters.isEmpty()) {
-            // There is chapters, but the complete list isn't displayed here
-            // To avoid getting the whole list, let's instead go to a manga page to get the list of links
-            val someChapter = visibleChapters[0].attr("href")
+            // There is chapters, but the complete list isn't always displayed here
+            // To get the whole list, let's instead go to a manga page to get the list of links
+            val someChapter = visibleChapters[0].select(".table__chapter > a").attr("href")
+            val mangaDocument = client.newCall(GET("$baseUrl$someChapter", headers)).execute().asJsoup()
+            val notVisibleChapters = mangaDocument.select("#dropdownMenuOffset+ul li")
 
-            mangaDocument = client.newCall(GET("$baseUrl$someChapter", headers)).execute().asJsoup()
-
-            return mangaDocument.select("#dropdownMenuOffset+ul li").mapIndexed { i, it ->
-                SChapter.create().apply {
-                    url = it.select("a").attr("href").replace(baseUrl, "")
-                    chapter_number = i.toFloat()
-                    name = it.select("a").text()
-                    date_upload = 0
-                    scanlator = ""
+            // If not everything is displayed
+            if (visibleChapters.count() < notVisibleChapters.count()) {
+                return notVisibleChapters.map {
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(it.select("a").attr("href"))
+                        name = it.select("a").text()
+                        date_upload = today
+                    }
+                }
+            } else {
+                return visibleChapters.map {
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(it.select("td.table__chapter > a").attr("href"))
+                        name = it.select("td.table__chapter > a span").text()
+                        date_upload = parseDate(it.select("td.table__date").text())
+                    }
                 }
             }
         }
-
-        return mutableListOf<SChapter>()
+        return mutableListOf()
     }
 
+    private val today = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
     private fun parseDate(date: String): Long {
-        return SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: 0L
+        return SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: today
     }
 
     // Pages
@@ -142,12 +167,12 @@ class MangaKawaii : ParsedHttpSource() {
         val mangaSlug = Regex("""var oeuvre_slug = "([^"]*)";""").find(document.toString())?.groupValues?.get(1)
 
         val pages = mutableListOf<Page>()
-        Regex(""""page_image":"([^"]*)"""").findAll(document.toString())?.asIterable().mapIndexed { i, it ->
+        Regex(""""page_image":"([^"]*)"""").findAll(document.toString()).asIterable().mapIndexed { i, it ->
             pages.add(
                 Page(
                     i,
-                    cdnUrl + "/uploads/manga/" + mangaSlug + "/chapters_fr/" + chapterSlug + "/" + it?.groupValues?.get(1),
-                    cdnUrl + "/uploads/manga/" + mangaSlug + "/chapters_fr/" + chapterSlug + "/" + it?.groupValues?.get(1)
+                    cdnUrl + "/uploads/manga/" + mangaSlug + "/chapters_fr/" + chapterSlug + "/" + it.groupValues[1],
+                    cdnUrl + "/uploads/manga/" + mangaSlug + "/chapters_fr/" + chapterSlug + "/" + it.groupValues[1]
                 )
             )
         }

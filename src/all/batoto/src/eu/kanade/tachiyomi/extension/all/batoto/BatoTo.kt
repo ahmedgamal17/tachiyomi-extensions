@@ -98,8 +98,38 @@ open class BatoTo(
     companion object {
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
-        private val MIRROR_PREF_ENTRIES = arrayOf("Bato.to", "Batotoo.com", "Comiko.net", "Battwo.com", "Mangatoto.com", "Mycdhands.com")
-        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://bato.to", "https://batotoo.com", "https://comiko.net", "https://battwo.com", "https://mangatoto.com", "https://mycdhands.com")
+        private val MIRROR_PREF_ENTRIES = arrayOf(
+            "bato.to",
+            "batocc.com",
+            "batotoo.com",
+            "batotwo.com",
+            "battwo.com",
+            "comiko.net",
+            "mangatoto.com",
+            "mangatoto.net",
+            "mangatoto.org",
+            "mycordant.co.uk",
+            "dto.to",
+            "hto.to",
+            "mto.to",
+            "wto.to"
+        )
+        private val MIRROR_PREF_ENTRY_VALUES = arrayOf(
+            "https://bato.to",
+            "https://batocc.com",
+            "https://batotoo.com",
+            "https://batotwo.com",
+            "https://battwo.com",
+            "https://comiko.net",
+            "https://mangatoto.com",
+            "https://mangatoto.net",
+            "https://mangatoto.org",
+            "https://mycordant.co.uk",
+            "https://dto.to",
+            "https://hto.to",
+            "https://mto.to",
+            "https://wto.to"
+        )
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private const val ALT_CHAPTER_LIST_PREF_KEY = "ALT_CHAPTER_LIST"
@@ -140,7 +170,7 @@ open class BatoTo(
     override fun latestUpdatesNextPageSelector() = "div#mainer nav.d-none .pagination .page-item:last-of-type:not(.disabled)"
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/browse?langs=$siteLang&sort=views_w&page=$page")
+        return GET("$baseUrl/browse?langs=$siteLang&sort=views_a&page=$page")
     }
 
     override fun popularMangaSelector() = latestUpdatesSelector()
@@ -323,11 +353,12 @@ open class BatoTo(
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
         val manga = SManga.create()
-        val status = infoElement.select("div.attr-item:contains(status) span").text()
+        val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
+        val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
         manga.title = infoElement.select("h3").text().removeEntities()
-        manga.author = infoElement.select("div.attr-item:contains(author) a:first-child").text()
-        manga.artist = infoElement.select("div.attr-item:contains(author) a:last-child").text()
-        manga.status = parseStatus(status)
+        manga.author = infoElement.select("div.attr-item:contains(author) span").text()
+        manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
+        manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
         manga.description = infoElement.select("div.limit-html").text() + "\n" + infoElement.select(".episode-list > .alert-warning").text().trim()
         manga.thumbnail_url = document.select("div.attr-cover img")
@@ -335,10 +366,15 @@ open class BatoTo(
         return manga
     }
 
-    private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("Ongoing") -> SManga.ONGOING
-        status.contains("Completed") -> SManga.COMPLETED
+    private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
+        workStatus == null -> SManga.UNKNOWN
+        workStatus.contains("Ongoing") -> SManga.ONGOING
+        workStatus.contains("Cancelled") -> SManga.CANCELLED
+        workStatus.contains("Hiatus") -> SManga.ON_HIATUS
+        workStatus.contains("Completed") -> when {
+            uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
+            else -> SManga.COMPLETED
+        }
         else -> SManga.UNKNOWN
     }
 
@@ -489,6 +525,35 @@ open class BatoTo(
                         pages.add(Page(i, imageUrl = if (server.startsWith("http")) "${server}$imgUrl" else "https:${server}$imgUrl"))
                     }
                 }
+        } else if (script.contains("const imgHttpLis = ") && script.contains("const batoWord = ") && script.contains(
+                "const batoPass = "
+            )
+        ) {
+            val duktape = Duktape.create()
+            val imgHttpLis = json.parseToJsonElement(
+                script.substringAfter("const imgHttpLis = ").substringBefore(";")
+            ).jsonArray
+            val batoWord = script.substringAfter("const batoWord = ").substringBefore(";")
+            val batoPass =
+                duktape.evaluate(script.substringAfter("const batoPass = ").substringBefore(";"))
+                    .toString()
+            val input =
+                cryptoJS + "CryptoJS.AES.decrypt($batoWord, \"$batoPass\").toString(CryptoJS.enc.Utf8);"
+            val imgWordLis = json.parseToJsonElement(duktape.evaluate(input).toString()).jsonArray
+            duktape.close()
+
+            if (imgHttpLis.size == imgWordLis.size) {
+                imgHttpLis.forEachIndexed { i: Int, item ->
+                    val imageUrl =
+                        "${item.jsonPrimitive.content}?${imgWordLis.get(i).jsonPrimitive.content}"
+                    pages.add(
+                        Page(
+                            i,
+                            imageUrl = imageUrl
+                        )
+                    )
+                }
+            }
         }
 
         return pages

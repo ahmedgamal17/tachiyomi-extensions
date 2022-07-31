@@ -31,16 +31,14 @@ class FoolSlideGenerator : ThemeSourceGenerator {
         SingleLang("Yuri-ism", "https://www.yuri-ism.net", "en", className = "YuriIsm"),
         SingleLang("Zandy no Fansub", "https://zandynofansub.aishiteru.org", "en"),
         SingleLang("Kirishima Fansub", "https://www.kirishimafansub.net", "es"),
-        SingleLang("Baixar Hentai", "https://leitura.baixarhentai.net", "pt-BR", isNsfw = true, overrideVersionCode = 3),
+        SingleLang("Baixar Hentai", "https://leitura.baixarhentai.net", "pt-BR", isNsfw = true, overrideVersionCode = 4),
         MultiLang("HNI-Scantrad", "https://hni-scantrad.com", listOf("fr", "en"), className = "HNIScantradFactory", pkgName = "hniscantrad", overrideVersionCode = 1),
-        SingleLang("QuegnaReader", "http://pignaquegna.altervista.org", "it", overrideVersionCode = 1),
         SingleLang("NIFTeam", "http://read-nifteam.info", "it"),
-        SingleLang("TuttoAnimeManga", "https://tuttoanimemanga.net", "it"),
         SingleLang("Rama", "https://www.ramareader.it", "it"),
         SingleLang("Mabushimajo", "http://mabushimajo.com", "tr"),
-        SingleLang("Hyakuro", "https://hyakuro.com", "en"),
         SingleLang("Le Cercle du Scan", "https://lel.lecercleduscan.com", "fr", className = "LeCercleDuScan", overrideVersionCode = 1),
         SingleLang("LetItGo Scans", "https://reader.letitgo.scans.today", "en", overrideVersionCode = 1),
+        SingleLang("Wanted Team", "https://reader.onepiecenakama.pl", "pl"),
     )
 
     companion object {

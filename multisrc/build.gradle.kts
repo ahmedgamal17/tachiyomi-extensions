@@ -8,16 +8,22 @@ plugins {
 }
 
 android {
-    compileSdkVersion(AndroidConfig.compileSdk)
+    compileSdk = AndroidConfig.compileSdk
 
     defaultConfig {
-        minSdkVersion(29)
-        targetSdkVersion(AndroidConfig.targetSdk)
+        minSdk = 29
+        targetSdk = AndroidConfig.targetSdk
     }
 }
 
 repositories {
     mavenCentral()
+}
+
+configurations {
+    compileOnly {
+        isCanBeResolved = true
+    }
 }
 
 dependencies {
@@ -28,7 +34,8 @@ tasks {
     val generateExtensions by registering {
         doLast {
             val isWindows = System.getProperty("os.name").toString().toLowerCase().contains("win")
-            var classPath = (configurations.debugCompileOnly.get().asFileTree.toList() +
+            var classPath = (
+                    configurations.compileOnly.get().asFileTree.toList() +
                     listOf(
                         configurations.androidApis.get().asFileTree.first().absolutePath, // android.jar path
                         "$projectDir/build/intermediates/aar_main_jar/debug/classes.jar" // jar made from this module
@@ -64,14 +71,24 @@ tasks {
                 throw Exception("Java process failed with exit code: $exitCode")
             }
         }
-        dependsOn("ktFormat", "ktLint", "assembleDebug")
+        dependsOn("ktLint", "assembleDebug")
     }
 
     register<org.jmailen.gradle.kotlinter.tasks.LintTask>("ktLint") {
+        if (project.hasProperty("theme")) {
+            val theme = project.property("theme")
+            source(files("src/main/java/eu/kanade/tachiyomi/multisrc/$theme", "overrides/$theme"))
+            return@register
+        }
         source(files("src", "overrides"))
     }
 
     register<org.jmailen.gradle.kotlinter.tasks.FormatTask>("ktFormat") {
+        if (project.hasProperty("theme")) {
+            val theme = project.property("theme")
+            source(files("src/main/java/eu/kanade/tachiyomi/multisrc/$theme", "overrides/$theme"))
+            return@register
+        }
         source(files("src", "overrides"))
     }
 }

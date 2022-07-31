@@ -1,4 +1,3 @@
-
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
@@ -6,12 +5,8 @@ ext {
     extName = 'Jinmantiantang'
     pkgNameSuffix = 'zh.jinmantiantang'
     extClass = '.Jinmantiantang'
-    extVersionCode = 23
+    extVersionCode = 29
     isNsfw = true
-}
-
-dependencies {
-    implementation project(':lib-ratelimit')
 }
 
 apply from: "$rootDir/common.gradle"

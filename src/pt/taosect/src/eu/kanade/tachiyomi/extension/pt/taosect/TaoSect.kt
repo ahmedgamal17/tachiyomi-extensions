@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.taosect
 
-import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -38,7 +37,7 @@ class TaoSect : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(RateLimitInterceptor(1, 2, TimeUnit.SECONDS))
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
     private val json: Json by injectLazy()
@@ -101,7 +100,7 @@ class TaoSect : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<List<TaoSectChapterDto>>()
 
-        if (result.isNullOrEmpty()) {
+        if (result.isEmpty()) {
             return MangasPage(emptyList(), hasNextPage = false)
         }
 
@@ -153,76 +152,8 @@ class TaoSect : HttpSource() {
             apiUrl.addQueryParameter("search", query)
         }
 
-        filters.forEach { filter ->
-            when (filter) {
-                is CountryFilter -> {
-                    filter.state
-                        .groupBy { it.state }
-                        .entries
-                        .forEach { entry ->
-                            val values = entry.value.joinToString(",") { it.id }
-
-                            if (entry.key == Filter.TriState.STATE_EXCLUDE) {
-                                apiUrl.addQueryParameter("paises_exclude", values)
-                            } else if (entry.key == Filter.TriState.STATE_INCLUDE) {
-                                apiUrl.addQueryParameter("paises", values)
-                            }
-                        }
-                }
-                is StatusFilter -> {
-                    filter.state
-                        .groupBy { it.state }
-                        .entries
-                        .forEach { entry ->
-                            val values = entry.value.joinToString(",") { it.id }
-
-                            if (entry.key == Filter.TriState.STATE_EXCLUDE) {
-                                apiUrl.addQueryParameter("situacao_exclude", values)
-                            } else if (entry.key == Filter.TriState.STATE_INCLUDE) {
-                                apiUrl.addQueryParameter("situacao", values)
-                            }
-                        }
-                }
-                is GenreFilter -> {
-                    filter.state
-                        .groupBy { it.state }
-                        .entries
-                        .forEach { entry ->
-                            val values = entry.value.joinToString(",") { it.id }
-
-                            if (entry.key == Filter.TriState.STATE_EXCLUDE) {
-                                apiUrl.addQueryParameter("generos_exclude", values)
-                            } else if (entry.key == Filter.TriState.STATE_INCLUDE) {
-                                apiUrl.addQueryParameter("generos", values)
-                            }
-                        }
-                }
-                is SortFilter -> {
-                    val orderBy = if (filter.state == null) SORT_LIST[DEFAULT_ORDERBY].id else
-                        SORT_LIST[filter.state!!.index].id
-                    val order = if (filter.state?.ascending == true) "asc" else "desc"
-
-                    apiUrl.addQueryParameter("order", order)
-                    apiUrl.addQueryParameter("orderby", orderBy)
-                }
-                is FeaturedFilter -> {
-                    if (query.isEmpty()) {
-                        if (filter.state == Filter.TriState.STATE_INCLUDE) {
-                            apiUrl.addQueryParameter("destaque", "1")
-                        } else if (filter.state == Filter.TriState.STATE_EXCLUDE) {
-                            apiUrl.addQueryParameter("destaque", "0")
-                        }
-                    }
-                }
-                is NsfwFilter -> {
-                    if (filter.state == Filter.TriState.STATE_INCLUDE) {
-                        apiUrl.addQueryParameter("mais_18", "1")
-                    } else if (filter.state == Filter.TriState.STATE_EXCLUDE) {
-                        apiUrl.addQueryParameter("mais_18", "0")
-                    }
-                }
-            }
-        }
+        filters.filterIsInstance<QueryParameterFilter>()
+            .forEach { it.toQueryParameter(apiUrl, query) }
 
         return GET(apiUrl.toString(), apiHeaders)
     }
@@ -255,7 +186,7 @@ class TaoSect : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<List<TaoSectProjectDto>>()
 
-        if (result.isNullOrEmpty()) {
+        if (result.isEmpty()) {
             throw Exception(PROJECT_NOT_FOUND)
         }
 
@@ -293,7 +224,7 @@ class TaoSect : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<List<TaoSectChapterDto>>()
 
-        if (result.isNullOrEmpty()) {
+        if (result.isEmpty()) {
             throw Exception(CHAPTERS_NOT_FOUND)
         }
 
@@ -333,7 +264,7 @@ class TaoSect : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<TaoSectChapterDto>()
 
-        if (result.pages.isNullOrEmpty()) {
+        if (result.pages.isEmpty()) {
             return emptyList()
         }
 
@@ -358,12 +289,17 @@ class TaoSect : HttpSource() {
             val firstPageRequest = imageRequest(firstPage)
 
             client.newCall(firstPageRequest).execute().use {
-                it.headers["Content-Type"]!!.contains("text/html")
+                val isHtml = it.headers["Content-Type"]!!.contains("text/html")
+
+                GoogleDriveResponse(!isHtml && it.isSuccessful, it.code)
             }
         }
 
-        if (hasExceededViewLimit.getOrDefault(false)) {
-            throw Exception(EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT)
+        val defaultResponse = GoogleDriveResponse(false, GD_BACKEND_ERROR)
+        val googleDriveResponse = hasExceededViewLimit.getOrDefault(defaultResponse)
+
+        if (!googleDriveResponse.isValid) {
+            throw Exception(googleDriveResponse.errorMessage)
         }
 
         return pages
@@ -405,28 +341,10 @@ class TaoSect : HttpSource() {
         CountryFilter(getCountryList()),
         StatusFilter(getStatusList()),
         GenreFilter(getGenreList()),
-        SortFilter(),
+        SortFilter(SORT_LIST, DEFAULT_ORDERBY),
         FeaturedFilter(),
         NsfwFilter()
     )
-
-    private class Tag(val id: String, name: String) : Filter.TriState(name)
-
-    private class CountryFilter(countries: List<Tag>) : Filter.Group<Tag>("País", countries)
-
-    private class StatusFilter(status: List<Tag>) : Filter.Group<Tag>("Status", status)
-
-    private class GenreFilter(genres: List<Tag>) : Filter.Group<Tag>("Gêneros", genres)
-
-    private class SortFilter : Filter.Sort(
-        "Ordem",
-        SORT_LIST.map { it.name }.toTypedArray(),
-        Selection(DEFAULT_ORDERBY, false)
-    )
-
-    private class FeaturedFilter : Filter.TriState("Mostrar destaques")
-
-    private class NsfwFilter : Filter.TriState("Mostrar conteúdo +18")
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromString(it.body?.string().orEmpty())
@@ -440,6 +358,7 @@ class TaoSect : HttpSource() {
     private fun String.toStatus() = when (this) {
         "Ativos" -> SManga.ONGOING
         "Finalizados", "Oneshots" -> SManga.COMPLETED
+        "Cancelados" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
@@ -488,6 +407,14 @@ class TaoSect : HttpSource() {
         Tag("62", "Webtoon")
     )
 
+    private data class GoogleDriveResponse(val isValid: Boolean, val code: Int) {
+        val errorMessage: String
+            get() = when (code) {
+                GD_SHARING_RATE_LIMIT_EXCEEDED -> EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT
+                else -> GOOGLE_DRIVE_UNAVAILABLE
+            }
+    }
+
     companion object {
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json"
@@ -502,7 +429,13 @@ class TaoSect : HttpSource() {
         private const val PROJECT_NOT_FOUND = "Projeto não encontrado."
         private const val CHAPTERS_NOT_FOUND = "Capítulos não encontrados."
         private const val EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT = "Limite de visualizações atingido " +
-            "no Google Drive. Aguarde com que o limite seja reestabelecido."
+            "no Google Drive. Tente novamente mais tarde."
+        private const val GOOGLE_DRIVE_UNAVAILABLE = "O Google Drive está indisponível no " +
+            "momento. Tente novamente mais tarde."
+
+        // Reference: https://developers.google.com/drive/api/guides/handle-errors
+        private const val GD_SHARING_RATE_LIMIT_EXCEEDED = 403
+        private const val GD_BACKEND_ERROR = 500
 
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.mundomangakun
 
-import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -33,7 +33,7 @@ class MundoMangaKun : ParsedHttpSource() {
     override val supportsLatest = false
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(RateLimitInterceptor(1, 3, TimeUnit.SECONDS))
+        .rateLimit(1, 3, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -150,12 +150,17 @@ class MundoMangaKun : ParsedHttpSource() {
             val firstPageRequest = imageRequest(firstPage)
 
             client.newCall(firstPageRequest).execute().use {
-                it.headers["Content-Type"]!!.contains("text/html")
+                val isHtml = it.headers["Content-Type"]!!.contains("text/html")
+
+                GoogleDriveResponse(!isHtml && it.isSuccessful, it.code)
             }
         }
 
-        if (hasExceededViewLimit.getOrDefault(false)) {
-            throw Exception(EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT)
+        val defaultResponse = GoogleDriveResponse(false, GD_BACKEND_ERROR)
+        val googleDriveResponse = hasExceededViewLimit.getOrDefault(defaultResponse)
+
+        if (!googleDriveResponse.isValid) {
+            throw Exception(googleDriveResponse.errorMessage)
         }
 
         return pageList
@@ -255,11 +260,25 @@ class MundoMangaKun : ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
+    private data class GoogleDriveResponse(val isValid: Boolean, val code: Int) {
+        val errorMessage: String
+            get() = when (code) {
+                GD_SHARING_RATE_LIMIT_EXCEEDED -> EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT
+                else -> GOOGLE_DRIVE_UNAVAILABLE
+            }
+    }
+
     companion object {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.41 Safari/537.36"
 
         private const val EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT = "Limite de visualizações atingido " +
-            "no Google Drive. Aguarde com que o limite seja reestabelecido."
+            "no Google Drive. Tente novamente mais tarde."
+        private const val GOOGLE_DRIVE_UNAVAILABLE = "O Google Drive está indisponível no " +
+            "momento. Tente novamente mais tarde."
+
+        // Reference: https://developers.google.com/drive/api/guides/handle-errors
+        private const val GD_SHARING_RATE_LIMIT_EXCEEDED = 403
+        private const val GD_BACKEND_ERROR = 500
     }
 }

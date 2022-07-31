@@ -9,12 +9,13 @@ class GigaViewerGenerator : ThemeSourceGenerator {
 
     override val themeClass = "GigaViewer"
 
-    override val baseVersionCode: Int = 4
+    override val baseVersionCode: Int = 5
 
     override val sources = listOf(
         SingleLang("Comic Days", "https://comic-days.com", "ja"),
         SingleLang("Comic Gardo", "https://comic-gardo.com", "ja"),
         SingleLang("Comiplex", "https://viewer.heros-web.com", "ja"),
+        SingleLang("Corocoro Online", "https://corocoro.jp", "ja"),
         SingleLang("Kurage Bunch", "https://kuragebunch.com", "ja"),
         SingleLang("MAGCOMI", "https://magcomi.com", "ja", className = "MagComi"),
         SingleLang("Magazine Pocket", "https://pocket.shonenmagazine.com", "ja"),
