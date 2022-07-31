@@ -72,10 +72,10 @@ class Remanga : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = true
 
-    private val userAgentRandomizer = " ${Random.nextInt().absoluteValue}"
+    private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/78.0$userAgentRandomizer")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.$userAgentRandomizer")
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/jxl,image/webp,*/*;q=0.8")
         .add("Referer", baseUrl.replace("api.", ""))
 
@@ -99,7 +99,7 @@ class Remanga : ConfigurableSource, HttpSource() {
         val originalRequest = chain.request()
         val response = chain.proceed(originalRequest)
         val urlRequest = originalRequest.url.toString()
-        val possibleType = urlRequest.substringAfterLast("/").split(".")
+        val possibleType = urlRequest.substringAfterLast("/").substringBefore("?").split(".")
         return if (urlRequest.contains("/images/") and (possibleType.size == 2)) {
             val realType = possibleType[1]
             val image = response.body?.byteString()?.toResponseBody("image/$realType".toMediaType())
@@ -108,7 +108,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             response
     }
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .addInterceptor { imageContentTypeIntercept(it) }
             .addInterceptor { authIntercept(it) }
             .build()
@@ -121,12 +121,12 @@ class Remanga : ConfigurableSource, HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/titles/last-chapters/?page=$page&count=$count", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/search/catalog/?ordering=-chapter_date&count=$count&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("bookmarks")) {
+        if (response.request.url.toString().contains("/bookmarks/")) {
             val page = json.decodeFromString<PageWrapperDto<MyLibraryDto>>(response.body!!.string())
             val mangas = page.content.map {
                 it.title.toSManga()
@@ -139,9 +139,21 @@ class Remanga : ConfigurableSource, HttpSource() {
             if (preferences.getBoolean(isLib_PREF, false)) {
                 content = content.filter { it.bookmark_type.isNullOrEmpty() }
             }
-            val mangas = content.map {
+
+            var mangas = content.map {
                 it.toSManga()
             }
+
+            if (mangas.isEmpty() && page.props.page < page.props.total_pages && preferences.getBoolean(isLib_PREF, false))
+                mangas = listOf(
+                    SManga.create().apply {
+                        val nextPage = "Пустая страница. Всё в «Закладках»"
+                        title = nextPage
+                        url = nextPage
+                        thumbnail_url = "$baseUrl/icon.png"
+                    }
+                )
+
             return MangasPage(mangas, page.props.page < page.props.total_pages)
         }
     }
@@ -151,9 +163,11 @@ class Remanga : ConfigurableSource, HttpSource() {
             // Do not change the title name to ensure work with a multilingual catalog!
             title = if (isEng.equals("rus")) rus_name else en_name
             url = "/api/titles/$dir/"
-            thumbnail_url = if (img.high.isNotEmpty()) {
+            thumbnail_url = if (img.high?.isNotEmpty() == true) {
                 baseUrl + img.high
-            } else baseUrl + img.mid
+            } else if (img.mid?.isNotEmpty() == true) {
+                baseUrl + img.mid
+            } else baseUrl + img.low
         }
 
     private val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US) }
@@ -224,11 +238,12 @@ class Remanga : ConfigurableSource, HttpSource() {
 
     private fun parseStatus(status: Int): Int {
         return when (status) {
-            0 -> SManga.COMPLETED
-            1 -> SManga.ONGOING
-            2 -> SManga.ONGOING
-            3 -> SManga.ONGOING
-            5 -> SManga.LICENSED
+            0 -> SManga.COMPLETED // Закончен
+            1 -> SManga.ONGOING // Продолжается
+            2 -> SManga.ON_HIATUS // Заморожен
+            3 -> SManga.ON_HIATUS // Нет переводчика
+            4 -> SManga.ONGOING // Анонс
+            5 -> SManga.LICENSED // Лицензировано
             else -> SManga.UNKNOWN
         }
     }
@@ -243,7 +258,7 @@ class Remanga : ConfigurableSource, HttpSource() {
         return when (age_limit) {
             2 -> "18+"
             1 -> "16+"
-            else -> "0+"
+            else -> ""
         }
     }
 
@@ -274,7 +289,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             }
             val mediaNameLanguage = if (isEng.equals("rus")) en_name else rus_name
             this.description = mediaNameLanguage + "\n" + ratingStar + " " + ratingValue + " (голосов: " + count_rating + ")\n" + altName + Jsoup.parse(o.description).text()
-            genre = parseType(type) + ", " + parseAge(age_limit) + ", " + (genres + categories).joinToString { it.name }
+            genre = (parseType(type) + ", " + parseAge(age_limit) + ", " + (genres + categories).joinToString { it.name }).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
             status = parseStatus(o.status.id)
         }
     }

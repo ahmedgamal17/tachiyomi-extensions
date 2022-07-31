@@ -15,7 +15,10 @@ class AsuraScansFactory : SourceFactory {
 }
 
 class AsuraScansEn : AsuraScans("https://www.asurascans.com", "en", SimpleDateFormat("MMM d, yyyy", Locale.US)) {
-    override val pageSelector = "div.rdminimal > p > img"
+
+    override val mangaDetailsSelectorDescription = "div.desc p, div.entry-content p, div[itemprop=description]:not(:has(p))"
+
+    override val pageSelector = "div.rdminimal > img, div.rdminimal > p > img, div.rdminimal > a > img, div.rdminimal > p > a > img"
 
     // Skip scriptPages
     override fun pageListParse(document: Document): List<Page> {
@@ -44,13 +47,13 @@ class AsuraScansTr : AsuraScans("https://tr.asurascans.com", "tr", SimpleDateFor
                 thumbnail_url = infoElement.select("div.thumb img").imgAttr()
 
                 val genres = infoElement.select(".mgen a")
-                    .map { element -> element.text().toLowerCase(Locale.ROOT) }
+                    .map { element -> element.text().lowercase(Locale.ROOT) }
                     .toMutableSet()
 
                 // add series type(manga/manhwa/manhua/other) thinggy to genre
                 document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
                     if (it.isEmpty().not() && genres.contains(it).not()) {
-                        genres.add(it.toLowerCase(Locale.ROOT))
+                        genres.add(it.lowercase(Locale.ROOT))
                     }
                 }
 

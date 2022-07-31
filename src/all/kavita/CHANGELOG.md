@@ -1,3 +1,17 @@
+## 1.3.5
+
+### Features
+
+* Ignore DOH
+* Added sort option `Item Added`
+* Latest button now shows latest `Item Added`
+
+## 1.3.4
+
+### Features
+
+* Exclude from bulk update warnings
+
 ## 1.2.3
 
 ### Fix

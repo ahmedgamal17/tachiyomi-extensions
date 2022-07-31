@@ -1,21 +1,19 @@
 package eu.kanade.tachiyomi.extension.en.zinchanmanga
 
-import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-@ExperimentalSerializationApi
 class ZinChanManga : HttpSource() {
     override val lang = "en"
 
@@ -30,7 +28,8 @@ class ZinChanManga : HttpSource() {
     private val apiClient by lazy {
         network.client.newBuilder()
             .sslSocketFactory(ZinChanCert.factory, ZinChanCert.manager)
-            .addInterceptor(RateLimitInterceptor(2)).build()
+            .rateLimit(5, 50)
+            .build()
     }
 
     private val apiHeaders by lazy {

@@ -5,11 +5,7 @@ ext {
     extName = 'Mangakawaii'
     pkgNameSuffix = 'fr.mangakawaii'
     extClass = '.MangaKawaii'
-    extVersionCode = 32
-}
-
-dependencies {
-    implementation project(':lib-ratelimit')
+    extVersionCode = 36
 }
 
 apply from: "$rootDir/common.gradle"

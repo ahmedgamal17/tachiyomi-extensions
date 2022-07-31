@@ -21,7 +21,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -36,6 +35,7 @@ import rx.schedulers.Schedulers
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -84,7 +84,7 @@ abstract class HentaiHand(
             .addQueryParameter("sort", "popularity")
             .addQueryParameter("order", "desc")
             .addQueryParameter("duration", "all")
-        hhLangId.forEachIndexed() {index, it ->
+        hhLangId.forEachIndexed() { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
         // if (altLangId != null) url.addQueryParameter("languages", altLangId.toString())
@@ -101,7 +101,7 @@ abstract class HentaiHand(
             .addQueryParameter("sort", "uploaded_at")
             .addQueryParameter("order", "desc")
             .addQueryParameter("duration", "all")
-        hhLangId.forEachIndexed() {index, it ->
+        hhLangId.forEachIndexed() { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
         return GET(url.toString())
@@ -132,7 +132,7 @@ abstract class HentaiHand(
             .addQueryParameter("page", page.toString())
             .addQueryParameter("q", query)
 
-        hhLangId.forEachIndexed() {index, it ->
+        hhLangId.forEachIndexed() { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
 
@@ -150,7 +150,7 @@ abstract class HentaiHand(
                 is LookupFilter -> {
                     filter.state.split(",").map { it.trim() }.filter { it.isNotBlank() }.map {
                         lookupFilterId(it, filter.uri) ?: throw Exception("No ${filter.singularName} \"$it\" was found")
-                    }.forEachIndexed() {index, it ->
+                    }.forEachIndexed() { index, it ->
                         if (!(filter.uri == "languages" && hhLangId.contains(it)))
                             url.addQueryParameter(filter.uri + "[$index]", it.toString())
                     }
@@ -191,8 +191,6 @@ abstract class HentaiHand(
                 "canceled" -> SManga.COMPLETED
                 else -> SManga.COMPLETED
             }
-
-
 
             description = listOf(
                 Pair("Alternative Title", obj["alternative_title"]!!.jsonPrimitive.content),
@@ -301,16 +299,16 @@ abstract class HentaiHand(
         val body = jsonObject.toString().toRequestBody(MEDIA_TYPE)
         val response = chain.proceed(POST("$baseUrl/api/login", headers, body))
         if (response.code == 401) {
-            throw Exception("Failed to login, check if username and password are correct")
+            throw IOException("Failed to login, check if username and password are correct")
         }
 
         if (response.body == null)
-            throw Exception("Login response body is empty")
+            throw IOException("Login response body is empty")
         try {
             // Returns access token as a string, unless unparseable
             return json.parseToJsonElement(response.body!!.string()).jsonObject["auth"]!!.jsonObject["access-token"]!!.jsonPrimitive.content
         } catch (e: IllegalArgumentException) {
-            throw Exception("Cannot parse login response body")
+            throw IOException("Cannot parse login response body")
         }
     }
 

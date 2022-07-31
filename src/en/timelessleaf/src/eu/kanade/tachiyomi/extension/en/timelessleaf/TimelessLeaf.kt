@@ -15,10 +15,6 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-/**
- *  @author Aria Moradi <aria.moradi007@gmail.com>
- */
-
 class TimelessLeaf : HttpSource() {
 
     override val name = "TimelessLeaf"
@@ -52,7 +48,7 @@ class TimelessLeaf : HttpSource() {
 
         // all mangas are in sub menus, go straight for that to deal with less menu items
         val menuLinks = document.select(".sub-menu a").filterNot { element ->
-            element.text().toLowerCase(Locale.ROOT).contains(pagesWeDontWant)
+            element.text().lowercase(Locale.ROOT).contains(pagesWeDontWant)
         }
 
         // combine the two lists

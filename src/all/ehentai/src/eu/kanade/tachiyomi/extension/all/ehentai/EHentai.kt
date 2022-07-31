@@ -48,12 +48,14 @@ abstract class EHentai(
 
     override val supportsLatest = true
 
+    private var lastMangaId = ""
+
     // true if lang is a "natural human language"
     private fun isLangNatural(): Boolean = lang !in listOf("none", "other")
 
     private fun genericMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
-        val parsedMangas = doc.select("table.itg td.glname")
+        val mangaElements = doc.select("table.itg td.glname")
             .let { elements ->
                 if (isLangNatural() && getEnforceLanguagePref()) {
                     elements.filter { element ->
@@ -65,12 +67,17 @@ abstract class EHentai(
                     elements
                 }
             }
-            .map {
+        val parsedMangas: MutableList<SManga> = mutableListOf()
+        for (i in mangaElements.indices) {
+            val manga = mangaElements[i].let {
                 SManga.create().apply {
                     // Get title
                     it.select("a")?.first()?.apply {
                         title = this.select(".glink").text()
                         url = ExGalleryMetadata.normalizeUrl(attr("href"))
+                        if (i == mangaElements.lastIndex) {
+                            lastMangaId = ExGalleryMetadata.galleryId(attr("href"))
+                        }
                     }
                     // Get image
                     it.parent().select(".glthumb img")?.first().apply {
@@ -79,6 +86,8 @@ abstract class EHentai(
                     }
                 }
             }
+            parsedMangas.add(manga)
+        }
 
         // Add to page if required
         val hasNextPage = doc.select("a[onclick=return false]").last()?.text() == ">"
@@ -159,6 +168,9 @@ abstract class EHentai(
         filters.forEach {
             if (it is UriFilter) it.addToUri(uri)
         }
+        if (uri.toString().contains("f_spf") || uri.toString().contains("f_spt")) {
+            if (page > 1) uri.appendQueryParameter("from", lastMangaId)
+        }
         return exGet(uri.toString(), page)
     }
 
@@ -206,7 +218,7 @@ abstract class EHentai(
             thumbnailUrl = select("#gd1 div").attr("style").nullIfBlank()?.let {
                 it.substring(it.indexOf('(') + 1 until it.lastIndexOf(')'))
             }
-            genre = select("#gdc div").text().nullIfBlank()?.trim()?.toLowerCase()
+            genre = select("#gdc div").text().nullIfBlank()?.trim()?.lowercase()
 
             uploader = select("#gdn").text().nullIfBlank()?.trim()
 
@@ -225,7 +237,7 @@ abstract class EHentai(
                                 ignore {
                                     when (
                                         left.removeSuffix(":")
-                                            .toLowerCase()
+                                            .lowercase()
                                     ) {
                                         "posted" -> datePosted = EX_DATE_FORMAT.parse(right)?.time ?: 0
                                         "visible" -> visible = right.nullIfBlank()

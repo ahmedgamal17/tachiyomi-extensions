@@ -5,11 +5,8 @@ ext {
     extName = 'Golden Mangás'
     pkgNameSuffix = 'pt.goldenmangas'
     extClass = '.GoldenMangas'
-    extVersionCode = 13
-}
-
-dependencies {
-    implementation project(':lib-ratelimit')
+    extVersionCode = 16
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

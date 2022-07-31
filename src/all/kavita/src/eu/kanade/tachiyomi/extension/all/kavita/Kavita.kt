@@ -7,7 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.MultiSelectListPreference
-import eu.kanade.tachiyomi.BuildConfig
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.all.kavita.dto.AuthenticationDto
 import eu.kanade.tachiyomi.extension.all.kavita.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.kavita.dto.MangaFormat
@@ -31,6 +31,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -45,10 +46,12 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -63,7 +66,7 @@ import java.io.IOException
 import java.net.ConnectException
 import java.security.MessageDigest
 
-class Kavita(private val suffix: String = "") : ConfigurableSource, HttpSource() {
+class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
     class CompareChapters {
         companion object : Comparator<SChapter> {
             override fun compare(a: SChapter, b: SChapter): Int {
@@ -86,7 +89,10 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, HttpSource()
             }
         }
     }
-
+    override val client: OkHttpClient =
+        network.client.newBuilder()
+            .dns(Dns.SYSTEM)
+            .build()
     override val id by lazy {
         val key = "${"kavita_$suffix"}/all/$versionId"
         val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
@@ -147,18 +153,18 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, HttpSource()
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
+        if (!isLoged) {
+            doLogin()
+        }
         return POST(
-            "$apiUrl/series/recently-added?pageNumber=$page&libraryId=0&pageSize=20",
+            "$apiUrl/series/all?pageNumber=$page&libraryId=0&pageSize=20",
             headersBuilder().build(),
-            buildFilterBody()
+            buildFilterBody(MetadataPayload(sorting = 4, sorting_asc = false, forceUseMetadataPayload = true))
         )
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<List<SeriesDto>>()
-        series = result
-        val mangaList = result.map { item -> helper.createSeriesDto(item, apiUrl) }
-        return MangasPage(mangaList, helper.hasNextPage(response))
+        return popularMangaParse(response)
     }
 
     /**
@@ -578,6 +584,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, HttpSource()
         Pair("Sort name", 1),
         Pair("Created", 2),
         Pair("Last modified", 3),
+        Pair("Item added", 4),
     )
     private class StatusFilter(name: String) : Filter.CheckBox(name, false)
     private class StatusFilterGroup(filters: List<StatusFilter>) :
@@ -859,19 +866,19 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, HttpSource()
     override fun headersBuilder(): Headers.Builder {
         if (jwtToken.isEmpty()) throw LoginErrorException("401 Error\nOPDS address got modified or is incorrect")
         return Headers.Builder()
-            .add("User-Agent", "Tachiyomi Kavita v${BuildConfig.VERSION_NAME}")
+            .add("User-Agent", "Tachiyomi Kavita v${AppInfo.getVersionName()}")
             .add("Content-Type", "application/json")
             .add("Authorization", "Bearer $jwtToken")
     }
     private fun setupLoginHeaders(): Headers.Builder {
         return Headers.Builder()
-            .add("User-Agent", "Tachiyomi Kavita v${BuildConfig.VERSION_NAME}")
+            .add("User-Agent", "Tachiyomi Kavita v${AppInfo.getVersionName()}")
             .add("Content-Type", "application/json")
             .add("Authorization", "Bearer $jwtToken")
     }
     private fun buildFilterBody(filter: MetadataPayload = toFilter): RequestBody {
         var filter = filter
-        if (!isFilterOn) {
+        if (!isFilterOn and !filter.forceUseMetadataPayload) {
             filter = MetadataPayload()
         }
 
@@ -1147,13 +1154,13 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, HttpSource()
                         .parseAs<ServerInfoDto>()
                     Log.e(
                         LOG_TAG,
-                        "Extension version: code=${BuildConfig.VERSION_CODE}  name=${BuildConfig.VERSION_NAME}" +
+                        "Extension version: code=${AppInfo.getVersionCode()}  name=${AppInfo.getVersionName()}" +
                             " - - Kavita version: ${serverInfoDto.kavitaVersion}"
                     ) // this is not a real error. Using this so it gets printed in dump logs if there's any error
                 } catch (e: EmptyRequestBody) {
-                    Log.e(LOG_TAG, "Extension version: code=${BuildConfig.VERSION_CODE} - name=${BuildConfig.VERSION_NAME}")
+                    Log.e(LOG_TAG, "Extension version: code=${AppInfo.getVersionCode()} - name=${AppInfo.getVersionName()}")
                 } catch (e: Exception) {
-                    Log.e(LOG_TAG, "Tachiyomi version: code=${BuildConfig.VERSION_CODE} - name=${BuildConfig.VERSION_NAME}", e)
+                    Log.e(LOG_TAG, "Tachiyomi version: code=${AppInfo.getVersionCode()} - name=${AppInfo.getVersionName()}", e)
                 }
                 try { // Load Filters
                     // Genres

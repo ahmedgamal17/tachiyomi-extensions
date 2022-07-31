@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.text.InputType
 import android.util.Log
 import android.widget.Toast
-import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.BookDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.CollectionDto
@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.extension.all.komga.dto.SeriesDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -44,9 +45,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
+open class Komga(suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/v1/series?page=${page - 1}&deleted=false", headers)
+        GET("$baseUrl/api/v1/series?page=${page - 1}&deleted=false&sort=metadata.titleSort,asc", headers)
 
     override fun popularMangaParse(response: Response): MangasPage =
         processSeriesPage(response)
@@ -103,7 +104,7 @@ open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
                     val statusToInclude = mutableListOf<String>()
                     filter.state.forEach { content ->
                         if (content.state) {
-                            statusToInclude.add(content.name.toUpperCase(Locale.ROOT))
+                            statusToInclude.add(content.name.uppercase(Locale.ROOT))
                         }
                     }
                     if (statusToInclude.isNotEmpty()) {
@@ -156,7 +157,7 @@ open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
                 }
                 is Filter.Sort -> {
                     var sortCriteria = when (filter.state?.index) {
-                        0 -> "metadata.titleSort"
+                        0 -> if (type == "series") "metadata.titleSort" else "name"
                         1 -> "createdDate"
                         2 -> "lastModifiedDate"
                         else -> ""
@@ -267,9 +268,12 @@ open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
             title = metadata.title
             url = "$baseUrl/api/v1/series/$id"
             thumbnail_url = "$url/thumbnail"
-            status = when (metadata.status) {
-                "ONGOING" -> SManga.ONGOING
-                "ENDED" -> SManga.COMPLETED
+            status = when {
+                metadata.status == "ENDED" && metadata.totalBookCount != null && booksCount < metadata.totalBookCount -> SManga.PUBLISHING_FINISHED
+                metadata.status == "ENDED" -> SManga.COMPLETED
+                metadata.status == "ONGOING" -> SManga.ONGOING
+                metadata.status == "ABANDONED" -> SManga.CANCELLED
+                metadata.status == "HIATUS" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
             genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
@@ -353,7 +357,7 @@ open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
                 ReadFilter(),
                 TypeSelect(),
                 CollectionSelect(listOf(CollectionFilterEntry("None")) + collections.map { CollectionFilterEntry(it.name, it.id) }),
-                LibraryGroup(libraries.map { LibraryFilter(it.id, it.name) }.sortedBy { it.name.toLowerCase(Locale.ROOT) }),
+                LibraryGroup(libraries.map { LibraryFilter(it.id, it.name) }.sortedBy { it.name.lowercase(Locale.ROOT) }),
                 StatusGroup(listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map { StatusFilter(it) }),
                 GenreGroup(genres.map { GenreFilter(it) }),
                 TagGroup(tags.map { TagFilter(it) }),
@@ -384,7 +388,7 @@ open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
 
     // keep the previous ID when lang was "en", so that preferences and manga bindings are not lost
     override val id by lazy {
-        val key = "${name.toLowerCase()}/en/$versionId"
+        val key = "${name.lowercase()}/en/$versionId"
         val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
         (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
     }
@@ -396,7 +400,7 @@ open class Komga(suffix: String = "") : ConfigurableSource, HttpSource() {
 
     override fun headersBuilder(): Headers.Builder =
         Headers.Builder()
-            .add("User-Agent", "TachiyomiKomga/${BuildConfig.VERSION_NAME}")
+            .add("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

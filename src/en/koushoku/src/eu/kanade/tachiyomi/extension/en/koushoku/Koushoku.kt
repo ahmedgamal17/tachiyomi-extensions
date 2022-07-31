@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.koushoku
 
-import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +11,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.CacheControl
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,12 +35,16 @@ class Koushoku : ParsedHttpSource() {
     override val baseUrl = "https://koushoku.org"
     override val name = "Koushoku"
     override val lang = "en"
-    override val supportsLatest = false
+    override val supportsLatest = true
 
-    private val rateLimitInterceptor = RateLimitInterceptor(5)
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor(rateLimitInterceptor)
+        .rateLimit(1)
         .build()
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36")
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
     override fun latestUpdatesSelector() = "#archives.feed .entries > .entry"
@@ -76,31 +83,49 @@ class Koushoku : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
 
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        filterList.findInstance<SortFilter>()?.let {
-            url.addQueryParameter("sort", it.toUriPart())
-        }
-        filterList.findInstance<OrderFilter>()?.let {
-            url.addQueryParameter("order", it.toUriPart())
-        }
-
+        filterList.findInstance<SortFilter>()?.addQueryParameter(url)
+        url.addQueryParameter("q", buildAdvQuery(query, filterList))
         return GET(url.toString(), headers)
+    }
+
+    private fun buildAdvQuery(query: String, filterList: FilterList): String {
+        val title = if (query.isNotBlank()) "title*:\"$query\" " else ""
+        val filters: List<String> = filterList.filterIsInstance<Filter.Text>().map { filter ->
+            if (filter.state.isBlank()) return@map ""
+            val included = mutableListOf<String>()
+            val excluded = mutableListOf<String>()
+            val name = if (filter.name.lowercase().contentEquals("tags")) "tag" else filter.name.lowercase()
+            filter.state.split(",").map(String::trim).filterNot(String::isBlank).forEach { entry ->
+                if (entry.startsWith("-")) {
+                    excluded.add(entry.slice(1 until entry.length))
+                } else {
+                    included.add(entry)
+                }
+            }
+            buildString {
+                if (included.isNotEmpty()) append("$name&*:\"${included.joinToString(",")}\" ")
+                if (excluded.isNotEmpty()) append("-$name&*:\"${excluded.joinToString(",")}\"")
+            }
+        }
+        return "$title${
+        filters.filterNot(String::isBlank).joinToString(" ", transform = String::trim)
+        }"
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
-    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/popular?page=$page", headers)
     override fun popularMangaSelector() = latestUpdatesSelector()
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".metadata .title").text()
-        thumbnail_url = document.select(thumbnailSelector).attr("src")
+        title = document.selectFirst(".metadata .title").text()
+        thumbnail_url = document.selectFirst(thumbnailSelector).attr("src")
         artist = document.select(".metadata .artists a, .metadata .circles a")
             .joinToString { it.text() }
         author = artist
@@ -114,6 +139,7 @@ class Koushoku : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        antiBan(document)
         return listOf(
             SChapter.create().apply {
                 setUrlWithoutDomain(response.request.url.encodedPath)
@@ -140,7 +166,7 @@ class Koushoku : ParsedHttpSource() {
         if (id.isNullOrEmpty())
             throw UnsupportedOperationException("Error: Unknown archive id")
 
-        val url = URL(document.selectFirst(".page img").attr("src"))
+        val url = URL(document.selectFirst(".main img, main img").attr("src"))
         val origin = "${url.protocol}://${url.host}"
 
         return (1..totalPages).map {
@@ -151,33 +177,57 @@ class Koushoku : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
 
     override fun getFilterList() = FilterList(
-        SortFilter(),
-        OrderFilter()
+        SortFilter(
+            "Sort",
+            arrayOf(
+                Sortable("ID", "id"),
+                Sortable("Title", "title"),
+                Sortable("Created Date", "created_at"),
+                Sortable("Uploaded Date", "published_at"),
+                Sortable("Pages", "pages"),
+            )
+        ),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        ArtistFilter(),
+        CircleFilter(),
+        MagazineFilter(),
+        ParodyFilter(),
+        TagFilter(),
+        PagesFilter()
     )
 
-    private class SortFilter : UriPartFilter(
-        "Sort",
-        arrayOf(
-            Pair("Created Date", "created_at"),
-            Pair("ID", "id"),
-            Pair("Title", "title"),
-            Pair("Published Date", "published_at")
-        )
-    )
+    // Adapted from Mangadex ext
+    class SortFilter(displayName: String, private val sortables: Array<Sortable>) :
+        Filter.Sort(
+            displayName,
+            sortables.map(Sortable::title).toTypedArray(),
+            Selection(2, false)
+        ) {
+        fun addQueryParameter(url: HttpUrl.Builder) {
+            if (state != null) {
+                val sort = sortables[state!!.index].value
+                val order = when (state!!.ascending) {
+                    true -> "asc"
+                    false -> "desc"
+                }
 
-    private class OrderFilter : UriPartFilter(
-        "Order",
-        arrayOf(
-            Pair("Descending", "desc"),
-            Pair("Ascending", "asc"),
-        )
-    )
-
-    // Taken from nhentai ext
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
+                url.addQueryParameter("sort", sort)
+                url.addQueryParameter("order", order)
+            }
+        }
     }
+
+    data class Sortable(val title: String, val value: String) {
+        override fun toString(): String = title
+    }
+
+    class ArtistFilter : Filter.Text("Artist")
+    class CircleFilter : Filter.Text("Circle")
+    class MagazineFilter : Filter.Text("Magazine")
+    class ParodyFilter : Filter.Text("Parody")
+    class TagFilter : Filter.Text("Tags")
+    class PagesFilter : Filter.Text("Pages")
 
     // Taken from nhentai ext
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
@@ -202,5 +252,71 @@ class Koushoku : ParsedHttpSource() {
 
         val size = document.selectFirst(".metadata .size td:nth-child(2)")
         append("Size: ").append(size.text())
+    }
+
+    // anti-ban
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        antiBan(document)
+
+        val mangas = document.select(popularMangaSelector()).map { element ->
+            popularMangaFromElement(element)
+        }
+
+        val hasNextPage = popularMangaNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        antiBan(document)
+
+        val mangas = document.select(searchMangaSelector()).map { element ->
+            searchMangaFromElement(element)
+        }
+
+        val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        antiBan(document)
+
+        val mangas = document.select(latestUpdatesSelector()).map { element ->
+            latestUpdatesFromElement(element)
+        }
+
+        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        return mangaDetailsParse(response.asJsoup())
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        antiBan(document)
+        return pageListParse(document)
+    }
+
+    private fun antiBan(document: Document) {
+        val styles = document.select("link[rel=stylesheet]")
+
+        styles.forEach {
+            val request = GET(it.absUrl("href"), headers, CacheControl.FORCE_NETWORK)
+            runCatching { client.newCall(request).execute().close() }
+        }
     }
 }

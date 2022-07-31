@@ -1,12 +1,15 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
 
 ext {
-    extName = 'Baozimanhua'
+    extName = 'Baozi Manhua'
     pkgNameSuffix = 'zh.baozimanhua'
-    extClass = '.Baozimanhua'
-    extVersionCode = 3
+    extClass = '.Baozi'
+    extVersionCode = 12
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation 'com.github.stevenyomi:baozibanner:9ac9b08e1d' // 1.0
+}
