@@ -280,10 +280,10 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         Genre("ملائكة", "ملائكة"),
         Genre("بعد الكارثة", "بعد الكارثة"),
         Genre("نظام", "نظام"),
-        Genre("صقل", "صقل")
+        Genre("صقل", "صقل"),
         Genre("نفسي", "نفسي"),
         Genre("وحوش", "وحوش"),
-        Genre("ويب تون", "ويب تون")
+        Genre("ويب تون", "ويب تون"),
     )
 
     open fun getTypeFilter(): List<Type> = listOf(
