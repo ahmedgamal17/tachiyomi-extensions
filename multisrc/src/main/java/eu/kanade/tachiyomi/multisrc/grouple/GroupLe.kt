@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -92,11 +93,19 @@ abstract class GroupLe(
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/search/advanced?offset=${50 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
+        if (query.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
+        return GET(url.toString().replace("=%3D", "="), headers)
+    }
+
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select(".expandable").first()
         val rawCategory = infoElement.select("span.elem_category").text()
         val category = if (rawCategory.isNotEmpty()) {
-            rawCategory.lowercase()
+            rawCategory
         } else {
             "манга"
         }
@@ -117,15 +126,15 @@ abstract class GroupLe(
             ratingValue > 0.5 -> "✬☆☆☆☆"
             else -> "☆☆☆☆☆"
         }
-        val rawAgeValue = infoElement.select(".elem_limitation .element-link").first()?.text()
+        val rawAgeValue = infoElement.select(".elem_limitation .element-link").first()?.text() ?: ""
         val rawAgeStop = when (rawAgeValue) {
-            "NC-17" -> "18+, "
-            "R18+" -> "18+, "
-            "R" -> "16+, "
-            "G" -> "16+, "
-            "PG" -> "16+, "
-            "PG-13" -> "12+, "
-            else -> ""
+            "NC-17" -> "18+"
+            "R18+" -> "18+"
+            "R" -> "16+"
+            "G" -> "16+"
+            "PG" -> "16+"
+            "PG-13" -> "12+"
+            else -> rawAgeValue
         }
         val manga = SManga.create()
         var authorElement = infoElement.select("span.elem_author").first()?.text()
@@ -135,7 +144,7 @@ abstract class GroupLe(
         manga.title = document.select("h1.names .name").text()
         manga.author = authorElement
         manga.artist = infoElement.select("span.elem_illustrator").first()?.text()
-        manga.genre = category + ", " + rawAgeStop + infoElement.select("span.elem_genre").text().split(",").joinToString { it.trim() }
+        manga.genre = (category + ", " + rawAgeStop + ", " + infoElement.select("span.elem_genre").text() + ", " + infoElement.select("span.elem_tag").text()).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim().lowercase() }
         var altName = ""
         if (infoElement.select(".another-names").isNotEmpty()) {
             altName = "Альтернативные названия:\n" + infoElement.select(".another-names").text() + "\n\n"
