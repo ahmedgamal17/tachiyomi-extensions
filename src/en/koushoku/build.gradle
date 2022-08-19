@@ -5,7 +5,7 @@ ext {
     extName = 'Koushoku'
     pkgNameSuffix = 'en.koushoku'
     extClass = '.Koushoku'
-    extVersionCode = 11
+    extVersionCode = 15
     isNsfw = true
 }
 

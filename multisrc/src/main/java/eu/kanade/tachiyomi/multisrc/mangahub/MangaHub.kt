@@ -17,15 +17,19 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -49,13 +53,83 @@ abstract class MangaHub(
 
     override val client: OkHttpClient by lazy {
         super.client.newBuilder()
+            .addInterceptor(::apiAuthInterceptor)
             .rateLimitHost(cdnImgUrl.toHttpUrl(), 1, 2)
             .build()
     }
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
+    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
+        val originalRequest = chain.request()
+
+        val cookie = client.cookieJar
+            .loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "mhub_access" }
+
+        val request =
+            if (originalRequest.url.toString() == "$cdnApiUrl/graphql" && cookie != null) {
+                originalRequest.newBuilder()
+                    .header("x-mhub-access", cookie.value)
+                    .build()
+            } else {
+                originalRequest
+            }
+
+        return chain.proceed(request)
+    }
+
+    private fun refreshApiKey(chapter: SChapter) {
+        val now = Calendar.getInstance().time.time
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val number = chapter.url
+            .substringAfter("chapter-")
+            .substringBefore("/")
+
+        val recently = "{\"${now - (0..120).random()}\":{\"mangaID\":${(1..42000).random()},\"number\":$number}}"
+
+        client.cookieJar.saveFromResponse(
+            url,
+            listOf(
+                Cookie.Builder()
+                    .domain(url.host)
+                    .name("recently")
+                    .value(URLEncoder.encode(recently, "utf-8"))
+                    .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
+                    .build()
+            )
+        )
+
+        val request = GET("$url?reloadKey=1", headers)
+        client.newCall(request).execute()
+    }
+
+    override fun headersBuilder(): Headers.Builder {
+        val defaultUserAgent = super.headersBuilder()["User-Agent"]
+
+        val chromeVersion = defaultUserAgent
+            ?.substringAfter("Chrome/")
+            ?.substringBefore(".")
+            ?.toIntOrNull()
+            ?: "102"
+
+        val edgeVersion = defaultUserAgent
+            ?.substringAfter("Edg/")
+            ?.substringBefore(".")
+            ?.toIntOrNull()
+            ?: chromeVersion
+
+        return super.headersBuilder()
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+            .add("Accept-Language", "en-US,en;q=0.5")
+            .add("DNT", "1")
+            .add("Referer", "$baseUrl/")
+            .add("Sec-CH-UA", "\"Chromium\";v=\"$chromeVersion\", \" Not A;Brand\";v=\"99\", \"Microsoft Edge\";v=\"$edgeVersion\"")
+            .add("Sec-CH-UA-Mobile", "?0")
+            .add("Sec-CH-UA-Platform", "\"Windows\"")
+            .add("Sec-Fetch-Dest", "document")
+            .add("Sec-Fetch-Mode", "navigate")
+            .add("Sec-Fetch-Site", "same-origin")
+            .add("Upgrade-Insecure-Requests", "1")
+    }
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
@@ -235,7 +309,15 @@ abstract class MangaHub(
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        val jsonHeaders = headers.newBuilder().add("Content-Type", "application/json").build()
+        val jsonHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .add("Content-Type", "application/json")
+            .add("Origin", baseUrl)
+            .set("Sec-Fetch-Dest", "empty")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .removeAll("Upgrade-Insecure-Requests")
+            .build()
 
         val slug = chapter.url
             .substringAfter("chapter/")
@@ -251,10 +333,23 @@ abstract class MangaHub(
         return POST("$cdnApiUrl/graphql", jsonHeaders, body)
     }
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        super.fetchPageList(chapter)
+            .doOnError { refreshApiKey(chapter) }
+            .retry(1)
+
     override fun pageListParse(response: Response): List<Page> {
         val cdn = "$cdnImgUrl/file/imghub"
         val chapterObject = json
             .decodeFromString<GraphQLDataDto<ChapterDto>>(response.body!!.string())
+
+        if (chapterObject.data?.chapter == null) {
+            if (chapterObject.errors != null) {
+                val errors = chapterObject.errors.joinToString("\n") { it.message }
+                throw Exception(errors)
+            }
+            throw Exception("Unknown error while processing pages")
+        }
 
         val pagesObject = json
             .decodeFromString<JsonObject>(chapterObject.data.chapter.pages)
@@ -267,6 +362,18 @@ abstract class MangaHub(
         throw UnsupportedOperationException("Not used.")
 
     // Image
+    override fun imageUrlRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .set("Sec-Fetch-Dest", "image")
+            .set("Sec-Fetch-Mode", "no-cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .removeAll("Upgrade-Insecure-Requests")
+            .build()
+
+        return GET(page.url, newHeaders)
+    }
+
     override fun imageUrlParse(document: Document): String =
         throw UnsupportedOperationException("Not used.")
 
@@ -368,12 +475,18 @@ abstract class MangaHub(
 // DTO
 @Serializable
 data class GraphQLDataDto<T>(
-    val data: T
+    val errors: List<ErrorDto>? = null,
+    val data: T? = null
+)
+
+@Serializable
+data class ErrorDto(
+    val message: String
 )
 
 @Serializable
 data class ChapterDto(
-    val chapter: ChapterInnerDto
+    val chapter: ChapterInnerDto?
 )
 
 @Serializable

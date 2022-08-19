@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.koushoku
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,15 +21,19 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Locale
+import kotlin.random.Random
 
 class Koushoku : ParsedHttpSource() {
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
 
-        val archiveRegex = "/archive/(\\d+)".toRegex()
-        const val thumbnailSelector = ".thumbnail img"
-        const val magazinesSelector = ".metadata .magazines a"
+        const val thumbnailSelector = "figure img"
+        const val magazinesSelector = ".metadata a[href^='/magazines/']"
+
+        private val PATTERN_IMAGES = "(.+/)(\\d+)(.*)".toRegex()
+        private val DATE_FORMAT = SimpleDateFormat("E, d MMM yyy HH:mm:ss 'UTC'", Locale.US)
     }
 
     override val baseUrl = "https://koushoku.org"
@@ -38,22 +43,33 @@ class Koushoku : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(KoushokuWebViewInterceptor())
-        .rateLimit(1, 4)
+        // Site: 40req per 1 minute
+        // Here: 1req per 2 sec -> 30req per 1 minute
+        // (somewhat lower due to caching)
+        .rateLimitHost("https://koushoku.org".toHttpUrl(), 1, 2)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36")
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder {
+        val chromeStableVersion = listOf("104.0.5112.69", "103.0.5060.71", "103.0.5060.70", "103.0.5060.53", "103.0.5060.129", "102.0.5005.99", "102.0.5005.98", "102.0.5005.78", "102.0.5005.125").random()
+        val chromeCanaryVersion = listOf("106.0.5227.0", "106.0.5209.0", "106.0.5206.0", "106.0.5201.2", "106.0.5201.0", "106.0.5200.0", "106.0.5199.0", "106.0.5197.0", "106.0.5196.0", "105.0.5195.2", "105.0.5194.0", "105.0.5193.0", "105.0.5192.0", "105.0.5191.0", "105.0.5190.0", "105.0.5189.0", "105.0.5186.0", "105.0.5185.0", "105.0.5184.0", "105.0.5182.0", "105.0.5180.0", "105.0.5179.3", "105.0.5178.0", "105.0.5177.2", "105.0.5176.0", "105.0.5175.0", "105.0.5174.0", "105.0.5173.0", "105.0.5172.0", "105.0.5171.0").random()
+        val chromeVersion = if (Random.nextFloat() > 0.2) chromeStableVersion else chromeCanaryVersion
+
+        val deviceInfo = if (Random.nextFloat() > 0.2) "" else "; " + listOf("SM-S908B", "SM-S908U", "SM-A536B", "SM-A536U", "SM-S901B", "SM-S901U", "SM-A736B", "SM-G973F", "SM-A528B", "SM-G975U", "SM-G990B", "SM-G990U").random()
+        val androidVersion = IntRange(if (deviceInfo.isEmpty()) 9 else 11, 12).random()
+
+        return super.headersBuilder()
+            .set("User-Agent", "Mozilla/5.0 (Linux; Android $androidVersion$deviceInfo) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chromeVersion Mobile Safari/537.36")
+            .add("Referer", "$baseUrl/")
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
     override fun latestUpdatesSelector() = "#archives.feed .entries > .entry"
-    override fun latestUpdatesNextPageSelector() = "#archives.feed .pagination .next"
+    override fun latestUpdatesNextPageSelector() = "footer nav li:has(a.active) + li:not(:last-child) > a"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        title = element.select(".title").text()
-        thumbnail_url = element.select(thumbnailSelector).attr("src")
+        setUrlWithoutDomain(element.selectFirst("a").attr("href"))
+        title = element.selectFirst("[title]").attr("title")
+        thumbnail_url = element.selectFirst(thumbnailSelector).absUrl("src")
     }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/archive/$id", headers)
@@ -132,13 +148,13 @@ class Koushoku : ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst(".metadata .title").text()
+        title = document.selectFirst(".metadata > h1").text()
 
         // Reuse cover from browse
-        thumbnail_url = document.selectFirst(thumbnailSelector).attr("src")
+        thumbnail_url = document.selectFirst(thumbnailSelector).absUrl("src")
             .replace(Regex("/\\d+\\.webp\$"), "/288.webp")
 
-        artist = document.select(".metadata .artists a, .metadata .circles a")
+        artist = document.select(".metadata a[href^='/artists/'], .metadata a[href^='/circles/']")
             .joinToString { it.text() }
         author = artist
         genre = document.select(".metadata .tags a, $magazinesSelector")
@@ -147,8 +163,6 @@ class Koushoku : ParsedHttpSource() {
         status = SManga.COMPLETED
     }
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl${manga.url}", headers)
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
@@ -156,8 +170,13 @@ class Koushoku : ParsedHttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(response.request.url.encodedPath)
                 name = "Chapter"
-                date_upload = document.select(".metadata .published td:nth-child(2)")
-                    .attr("data-unix").toLong() * 1000
+
+                val dateText = document.select("tr > td:first-child:contains(Uploaded Date) + td")
+                    .text()
+                date_upload = runCatching { DATE_FORMAT.parse(dateText) }
+                    .getOrNull()
+                    ?.time
+                    ?: 0
             }
         )
     }
@@ -167,34 +186,29 @@ class Koushoku : ParsedHttpSource() {
 
     override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
 
-    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl${chapter.url}/1")
+    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl${chapter.url}/1", headers)
 
-    override fun pageListParse(document: Document): List<Page> {
-        val totalPages = document.selectFirst(".total").text().toInt()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        val totalPages = document.selectFirst(".total")?.text()?.toInt() ?: 0
         if (totalPages == 0)
             throw UnsupportedOperationException("Error: Empty pages (try Webview)")
 
-        val id = archiveRegex.find(document.location())?.groups?.get(1)?.value
-        if (id.isNullOrEmpty())
-            throw UnsupportedOperationException("Error: Unknown archive id")
-
-        val url = URL(document.selectFirst(".main img, main img").attr("src"))
-        val origin = "${url.protocol}://${url.host}"
+        val match = PATTERN_IMAGES.find(response.request.url.toString())!!
+        val prefix = match.groupValues[1]
+        val suffix = match.groupValues[3]
 
         return (1..totalPages).map {
-            Page(it, "", "$origin/data/$id/$it.jpg")
+            Page(it, "$prefix$it$suffix")
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .add("Origin", baseUrl)
-            .build()
+    override fun pageListParse(document: Document): List<Page> =
+        throw UnsupportedOperationException("Not used")
 
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String =
+        document.selectFirst(".main img, main img").absUrl("src")
 
     override fun getFilterList() = FilterList(
         SortFilter(
@@ -260,17 +274,17 @@ class Koushoku : ParsedHttpSource() {
             append("\n")
         }
 
-        val parodies = document.select(".metadata .parodies a")
+        val parodies = document.select(".metadata a[href^='/parodies/']")
         if (parodies.isNotEmpty()) {
             append("Parodies: ")
             append(parodies.joinToString { it.text() })
             append("\n")
         }
 
-        val pages = document.selectFirst(".metadata .pages td:nth-child(2)")
+        val pages = document.selectFirst("tr > td:first-child:contains(Pages) + td")
         append("Pages: ").append(pages.text()).append("\n")
 
-        val size = document.selectFirst(".metadata .size td:nth-child(2)")
-        append("Size: ").append(size.text())
+        val size: Element? = document.selectFirst("tr > td:first-child:contains(Size) + td")
+        append("Size: ").append(size?.text() ?: "Unknown")
     }
 }

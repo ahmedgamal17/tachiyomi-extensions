@@ -12,8 +12,8 @@ class MintManga : GroupLe("MintManga", "https://mintmanga.live", "ru") {
     override val id: Long = 6
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/advanced?offset=${70 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
+        (if (filters.isEmpty()) getFilterList().reversed() else filters.reversed()).forEach { filter ->
             when (filter) {
                 is GenreList -> filter.state.forEach { genre ->
                     if (genre.state != Filter.TriState.STATE_IGNORE) {
@@ -41,8 +41,10 @@ class MintManga : GroupLe("MintManga", "https://mintmanga.live", "ru") {
                     }
                 }
                 is OrderBy -> {
-                    if (filter.state > 0) {
-                        val ord = arrayOf("not", "year", "rate", "popularity", "votes", "created", "updated")[filter.state]
+                    if (url.toString().contains("&") && filter.state < 6) {
+                        url.addQueryParameter("sortType", arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE")[filter.state])
+                    } else {
+                        val ord = arrayOf("rate", "popularity", "year", "name", "created", "updated", "votes")[filter.state]
                         val ordUrl = "$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
                         return GET(ordUrl.toString(), headers)
                     }
@@ -50,17 +52,14 @@ class MintManga : GroupLe("MintManga", "https://mintmanga.live", "ru") {
                 else -> return@forEach
             }
         }
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("q", query)
-        }
         return if (url.toString().contains("&"))
             GET(url.toString().replace("=%3D", "="), headers)
         else popularMangaRequest(page)
     }
 
     private class OrderBy : Filter.Select<String>(
-        "Сортировка (только)",
-        arrayOf("Без сортировки", "По году", "По популярности", "Популярно сейчас", "По рейтингу", "Новинки", "По дате обновления")
+        "Сортировка",
+        arrayOf("По популярности", "Популярно сейчас", "По году", "По имени", "Новинки", "По дате обновления", "По рейтингу")
     )
 
     private class Genre(name: String, val id: String) : Filter.TriState(name)
@@ -111,9 +110,10 @@ class MintManga : GroupLe("MintManga", "https://mintmanga.live", "ru") {
         Genre("Арт", "el_2220"),
         Genre("Ёнкома", "el_2741"),
         Genre("Комикс", "el_1903"),
+        Genre("Манга", "el_6421"),
         Genre("Манхва", "el_1873"),
         Genre("Маньхуа", "el_1875"),
-        Genre("Ранобэ", "el_5688"),
+        Genre("Ранобэ", "el_5688")
     )
 
     private fun getGenreList() = listOf(
