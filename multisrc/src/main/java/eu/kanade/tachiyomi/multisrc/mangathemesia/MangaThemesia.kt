@@ -94,13 +94,13 @@ abstract class MangaThemesia(
                         url.addQueryParameter("yearx", filter.state)
                     }
                     is StatusFilter -> {
-                        url.addQueryParameter("status", filter.selectedValue)
+                        url.addQueryParameter("status", filter.selectedValue())
                     }
                     is TypeFilter -> {
-                        url.addQueryParameter("type", filter.selectedValue)
+                        url.addQueryParameter("type", filter.selectedValue())
                     }
                     is OrderByFilter -> {
-                        url.addQueryParameter("order", filter.selectedValue)
+                        url.addQueryParameter("order", filter.selectedValue())
                     }
                     is GenreListFilter -> {
                         filter.state
@@ -112,7 +112,7 @@ abstract class MangaThemesia(
                     }
                     // if site has project page, default value "hasProjectPage" = false
                     is ProjectFilter -> {
-                        if (filter.selectedValue == "project-filter-on") {
+                        if (filter.selectedValue() == "project-filter-on") {
                             url.setPathSegment(0, projectPageString.substring(1))
                         }
                     }
@@ -142,7 +142,7 @@ abstract class MangaThemesia(
     override fun searchMangaNextPageSelector() = "div.pagination .next, div.hpage .r"
 
     // Manga details
-    open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info"
+    open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody"
     open val seriesTitleSelector = "h1.entry-title"
     open val seriesArtistSelector = ".infotable tr:contains(artist) td:last-child, .tsinfo .imptdt:contains(artist) i, .fmed b:contains(artist)+span, span:contains(artist)"
     open val seriesAuthorSelector = ".infotable tr:contains(author) td:last-child, .tsinfo .imptdt:contains(author) i, .fmed b:contains(author)+span, span:contains(author)"
@@ -310,14 +310,14 @@ abstract class MangaThemesia(
 
     open class SelectFilter(
         displayName: String,
-        vals: Array<Pair<String, String>>,
+        val vals: Array<Pair<String, String>>,
         defaultValue: String? = null
     ) : Filter.Select<String>(
         displayName,
         vals.map { it.first }.toTypedArray(),
         vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0
     ) {
-        val selectedValue = vals[state].second
+        fun selectedValue() = vals[state].second
     }
 
     protected class StatusFilter : SelectFilter(
@@ -449,7 +449,12 @@ abstract class MangaThemesia(
         }
     }
 
-    protected open fun Element.imgAttr(): String = if (this.hasAttr("data-src")) this.attr("abs:data-src") else this.attr("abs:src")
+    protected open fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
+
     protected open fun Elements.imgAttr(): String = this.first().imgAttr()
 
     // Unused
