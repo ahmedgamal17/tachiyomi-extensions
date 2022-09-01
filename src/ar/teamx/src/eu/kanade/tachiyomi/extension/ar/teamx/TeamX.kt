@@ -44,9 +44,6 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /* Decreases calls, helps with Cloudflare
-    private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this*/
-
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
@@ -98,11 +95,8 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         val postHeaders = headers.newBuilder()
             .add("Referer", "$baseUrl/")
             .build()
-        val pageData = FormBody.Builder()
-            .add("keyword", "$query")
-            .build()
         return if (query.isNotBlank()) {
-            POST("https://mnhaestate.com/ajax/search", postHeaders, pageData)
+            GET("$baseUrl/ajax/search?keyword=$query", postHeaders)
         } else {
             val url = "$baseUrl/series?page=$page".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
@@ -128,7 +122,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaSelector() = "div.bs > div.bsx, div.image-parent"
+    override fun searchMangaSelector() = "div.bs > div.bsx, li.list-group-item"
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
@@ -150,6 +144,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
             document.select("div.review-content").first().let { info ->
                 description = info.select("p").text()
             }
+            title = document.select("div.author-info-title > h1").text()
 
             thumbnail_url = document.select("img[alt=Manga Image]").attr("src")
 
@@ -192,7 +187,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href"))
-            name = element.select("div.epl-title").text() + ":" + element.select("div.epl-num").text()
+            name = element.select("div.epl-num").text() + " : " + element.select("div.epl-title").text()
         }
     }
 
