@@ -192,7 +192,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href"))
-            name = element.select("div.epl-title").text()
+            name = element.select("div.epl-title").text() + ":" + element.select("div.epl-num").text()
         }
     }
 
