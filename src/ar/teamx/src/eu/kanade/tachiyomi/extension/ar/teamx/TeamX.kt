@@ -25,6 +25,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 
 class TeamX : ConfigurableSource, ParsedHttpSource() {
 
