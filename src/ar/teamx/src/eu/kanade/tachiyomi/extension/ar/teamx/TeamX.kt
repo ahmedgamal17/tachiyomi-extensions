@@ -187,8 +187,17 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href"))
-            name = element.select("div.epl-num").text() + " : " + element.select("div.epl-title").text()
+            name = element.select("div.epl-title").text()
+            val epNum = getNumberFromEpsString(element.select("div.epl-num").text())
+            chapter_number = when {
+                (epNum.isNotEmpty()) -> epNum.toFloat()
+                else -> 1F
+            }
         }
+    }
+
+    private fun getNumberFromEpsString(epsStr: String): String {
+        return epsStr.filter { it.isDigit() }
     }
 
     // Pages
