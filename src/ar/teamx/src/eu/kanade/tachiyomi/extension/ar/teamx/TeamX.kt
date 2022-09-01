@@ -23,6 +23,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
 import java.util.concurrent.TimeUnit
 
 class TeamX : ConfigurableSource, ParsedHttpSource() {
@@ -188,12 +189,17 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href"))
             name = element.select("div.epl-title").text()
+            date_upload = element.select("div.epl-date").first()?.text()?.let { parseChapterDate(it) } ?: 0
             val epNum = getNumberFromEpsString(element.select("div.epl-num").text())
             chapter_number = when {
                 (epNum.isNotEmpty()) -> epNum.toFloat()
                 else -> 1F
             }
         }
+    }
+
+    private fun parseChapterDate(date: String): Long {
+        return SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.getDefault()).parse(date)?.time ?: 0L
     }
 
     private fun getNumberFromEpsString(epsStr: String): String {
