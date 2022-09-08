@@ -12,10 +12,15 @@ import SeriesWrapperDto
 import SubSearchDto
 import android.annotation.SuppressLint
 import android.annotation.TargetApi
+import android.app.Application
+import android.content.SharedPreferences
 import android.os.Build
+import android.widget.Toast
+import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -36,13 +41,15 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class Newbie : HttpSource() {
+class Newbie : ConfigurableSource, HttpSource() {
     override val name = "NewManga(Newbie)"
 
     override val id: Long = 8033757373676218584
@@ -50,6 +57,10 @@ class Newbie : HttpSource() {
     override val baseUrl = "https://newmanga.org"
 
     override val lang = "ru"
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override val supportsLatest = true
 
@@ -90,7 +101,7 @@ class Newbie : HttpSource() {
         val o = this
         return SManga.create().apply {
             // Do not change the title name to ensure work with a multilingual catalog!
-            title = o.title.en
+            title = if (isEng.equals("rus")) o.title.ru else o.title.en
             url = "$id"
             thumbnail_url = if (image.srcset.large.isNotEmpty()) {
                 "$IMAGE_URL/${image.srcset.large}"
@@ -113,7 +124,7 @@ class Newbie : HttpSource() {
     private fun SearchLibraryDto.toSearchManga(): SManga {
         return SManga.create().apply {
             // Do not change the title name to ensure work with a multilingual catalog!
-            title = document.title_en
+            title = if (isEng.equals("rus")) document.title_ru else document.title_en
             url = document.id
             thumbnail_url = if (document.image_large.isNotEmpty()) {
                 "$IMAGE_URL/${document.image_large}"
@@ -241,12 +252,13 @@ class Newbie : HttpSource() {
         val o = this
         return SManga.create().apply {
             // Do not change the title name to ensure work with a multilingual catalog!
-            title = o.title.en
+            title = if (isEng.equals("rus")) o.title.ru else o.title.en
             url = "$id"
             thumbnail_url = "$IMAGE_URL/${image.srcset.large}"
             author = o.author?.name
             artist = o.artist?.name
-            description = o.title.ru + "\n" + ratingStar + " " + ratingValue + " [♡" + hearts + "]\n" + Jsoup.parse(o.description).text()
+            val mediaNameLanguage = if (isEng.equals("rus")) o.title.en else o.title.ru
+            description = mediaNameLanguage + "\n" + ratingStar + " " + ratingValue + " [♡" + hearts + "]\n" + Jsoup.parse(o.description).text()
             genre = parseType(type) + ", " + adult?.let { parseAge(it) } + ", " + genres.joinToString { it.title.ru.capitalize() }
             status = parseStatus(o.status)
         }
@@ -278,6 +290,8 @@ class Newbie : HttpSource() {
     @SuppressLint("DefaultLocale")
     private fun chapterName(book: BookDto): String {
         var chapterName = "${book.tom}. Глава ${DecimalFormat("#,###.##").format(book.number).replace(",", ".")}"
+        if (!book.is_available)
+            chapterName += " \uD83D\uDCB2 "
         if (book.name?.isNotBlank() == true) {
             chapterName += " ${book.name.capitalize()}"
         }
@@ -313,10 +327,11 @@ class Newbie : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val body = response.body!!.string()
-        val chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(body)
-
-        return chapters.items.filter { it.is_available }.map { chapter ->
+        var chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body!!.string()).items
+        if (!preferences.getBoolean(PAID_PREF, false)) {
+            chapters = chapters.filter { it.is_available }
+        }
+        return chapters.map { chapter ->
             SChapter.create().apply {
                 chapter_number = chapter.number
                 name = chapterName(chapter)
@@ -340,8 +355,7 @@ class Newbie : HttpSource() {
     }
 
     private fun pageListParse(response: Response, chapter: SChapter): List<Page> {
-        val body = response.body?.string()!!
-        val pages = json.decodeFromString<List<PageDto>>(body)
+        val pages = json.decodeFromString<List<PageDto>>(response.body?.string()!!)
         val result = mutableListOf<Page>()
         pages.forEach { page ->
             (1..page.slices!!).map { i ->
@@ -607,9 +621,46 @@ class Newbie : HttpSource() {
         CheckFilter("18+", "ADULT_18")
     )
 
+    private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
+    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+        val titleLanguagePref = ListPreference(screen.context).apply {
+            key = LANGUAGE_PREF
+            title = LANGUAGE_PREF_Title
+            entries = arrayOf("Английский", "Русский")
+            entryValues = arrayOf("eng", "rus")
+            summary = "%s"
+            setDefaultValue("eng")
+            setOnPreferenceChangeListener { _, newValue ->
+                val titleLanguage = preferences.edit().putString(LANGUAGE_PREF, newValue as String).commit()
+                val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                titleLanguage
+            }
+        }
+        val paidChapterShow = androidx.preference.CheckBoxPreference(screen.context).apply {
+            key = PAID_PREF
+            title = PAID_PREF_Title
+            summary = "Показывает не купленные\uD83D\uDCB2 главы(может вызвать ошибки при обновлении/автозагрузке)"
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean(key, checkValue).commit()
+            }
+        }
+        screen.addPreference(titleLanguagePref)
+        screen.addPreference(paidChapterShow)
+    }
+
     companion object {
         private const val API_URL = "https://api.newmanga.org/v2"
         private const val IMAGE_URL = "https://storage.newmanga.org"
+
+        private const val LANGUAGE_PREF = "NewMangaTitleLanguage"
+        private const val LANGUAGE_PREF_Title = "Выбор языка на обложке"
+
+        private const val PAID_PREF = "PaidChapter"
+        private const val PAID_PREF_Title = "Показывать платные главы"
     }
 
     private val json: Json by injectLazy()
