@@ -62,7 +62,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("MangaTale", "https://mangatale.co", "id"),
         SingleLang("MangaWT", "https://mangawt.com", "tr", overrideVersionCode = 5),
         SingleLang("Mangayaro", "https://mangayaro.net", "id"),
-        SingleLang("MangaSwat", "https://swatmanga.me", "ar", overrideVersionCode = 9),
+        SingleLang("MangaSwat", "https://swatmanga.me", "ar", overrideVersionCode = 10),
         SingleLang("MangKomik", "https://mangkomik.com", "id"),
         SingleLang("Mangás Chan", "https://mangaschan.com", "pt-BR", className = "MangasChan"),
         SingleLang("Manhwa Freak", "https://manhwafreak.com", "en", overrideVersionCode = 1),
