@@ -1,20 +1,15 @@
 package eu.kanade.tachiyomi.extension.all.reaperscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.SChapter
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class ReaperScansFactory : SourceFactory {
     override fun createSources() = listOf(
-        ReaperScansEn(),
-        ReaperScansBr(),
         ReaperScansTr(),
         ReaperScansId(),
         ReaperScansFr()
@@ -42,28 +37,6 @@ abstract class ReaperScans(
 
         setUrlWithoutDomain(fixedUrl)
     }
-}
-
-class ReaperScansEn : ReaperScans(
-    "https://reaperscans.com",
-    "en",
-    SimpleDateFormat("MMM dd,yyyy", Locale.US)
-) {
-
-    override val versionId = 2
-}
-
-class ReaperScansBr : ReaperScans(
-    "https://reaperscans.com.br",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale.US)
-) {
-
-    override val id = 7767018058145795388
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
 }
 
 class ReaperScansTr : ReaperScans(

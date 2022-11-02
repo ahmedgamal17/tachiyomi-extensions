@@ -34,7 +34,8 @@ class BilibiliComicsFactory : SourceFactory {
         BilibiliComicsEn(),
         BilibiliComicsCn(),
         BilibiliComicsId(),
-        BilibiliComicsEs()
+        BilibiliComicsEs(),
+        BilibiliComicsFr(),
     )
 }
 
@@ -207,6 +208,7 @@ abstract class BilibiliComics(lang: String) : Bilibili(
             val refreshTokenResponse = chain.proceed(refreshTokenRequest)
 
             accessTokenCookie = refreshTokenParse(refreshTokenResponse)
+            refreshTokenResponse.close()
 
             request = request.newBuilder()
                 .header("Authorization", "Bearer ${accessTokenCookie!!.accessToken}")
@@ -353,5 +355,20 @@ class BilibiliComicsEs : BilibiliComics(BilibiliIntl.SPANISH) {
         BilibiliTag("Suspenso", 41),
         BilibiliTag("Urbano", 9),
         BilibiliTag("Wuxia", 103)
+    )
+}
+
+class BilibiliComicsFr : BilibiliComics(BilibiliIntl.FRENCH) {
+
+    override fun getAllGenres(): Array<BilibiliTag> = arrayOf(
+        BilibiliTag("Tout", -1),
+        BilibiliTag("BL", 3),
+        BilibiliTag("Science Fiction", 8),
+        BilibiliTag("Historique", 12),
+        BilibiliTag("Romance", 13),
+        BilibiliTag("GL", 16),
+        BilibiliTag("Fantasy Orientale", 30),
+        BilibiliTag("Suspense", 41),
+        BilibiliTag("Moderne", 111)
     )
 }
