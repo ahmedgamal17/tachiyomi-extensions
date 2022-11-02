@@ -3,28 +3,27 @@ package eu.kanade.tachiyomi.extension.zh.boylove
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
-import org.jsoup.Jsoup
-import org.jsoup.select.Evaluator
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.long
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
-
-internal const val IMAGE_HOST = "https://blcnimghost1.cc" // 也有 2
 
 @Serializable
 class MangaDto(
     val id: Int,
-    val title: String,
-    val image: String,
-    val auther: String,
-    val desc: String,
-    val mhstatus: Int,
-    val keyword: String,
+    private val title: String,
+    private val update_time: JsonPrimitive? = null,
+    private val image: String,
+    private val auther: String,
+    private val desc: String,
+    private val mhstatus: Int,
+    private val keyword: String,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
         title = this@MangaDto.title
         author = auther
-        description = desc
         genre = keyword.replace(",", ", ")
         status = when (mhstatus) {
             0 -> SManga.ONGOING
@@ -32,33 +31,36 @@ class MangaDto(
             else -> SManga.UNKNOWN
         }
         thumbnail_url = image.toImageUrl()
+        val rawUpdateTime = update_time
+        if (rawUpdateTime == null) {
+            description = desc.trim()
+            return@apply
+        }
+        val updateTime = when {
+            rawUpdateTime.isString -> rawUpdateTime.content
+            else -> dateFormat.format(Date(rawUpdateTime.long * 1000))
+        }
+        description = "更新时间：$updateTime\n\n${desc.trim()}"
         initialized = true
     }
 }
 
-fun String.toImageUrl() = if (startsWith("http")) this else "$IMAGE_HOST$this"
+fun String.toImageUrl() =
+    if (startsWith("http")) {
+        this
+    } else {
+        val i = (hashCode() and 1) + 1 // 1 or 2
+        "https://blcnimghost$i.cc$this"
+    }
 
 @Serializable
 class ChapterDto(
-    val id: Int,
-    val title: String,
-    val manhua_id: Int,
-    val update_time: String,
-    val content: String?,
-    val imagelist: String,
+    private val id: Int,
+    private val title: String,
 ) {
     fun toSChapter() = SChapter.create().apply {
-        url = "$manhua_id/$id:${getImages()}"
+        url = "/home/book/capter/id/$id"
         name = title.trim()
-        date_upload = dateFormat.parse(update_time)?.time ?: 0
-    }
-
-    private fun getImages(): String {
-        return imagelist.ifEmpty {
-            if (content == null) return ""
-            Jsoup.parse(content).select(Evaluator.Tag("img"))
-                .joinToString(",") { it.attr("src") }
-        }
     }
 }
 

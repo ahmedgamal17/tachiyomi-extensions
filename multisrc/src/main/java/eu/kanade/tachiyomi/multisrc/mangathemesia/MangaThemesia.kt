@@ -30,12 +30,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+// Formerly WPMangaStream & WPMangaReader -> MangaThemesia
 abstract class MangaThemesia(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
     val mangaUrlDirectory: String = "/manga",
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+    val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 ) : ParsedHttpSource() {
 
     protected open val json: Json by injectLazy()
@@ -362,7 +363,12 @@ abstract class MangaThemesia(
         )
     )
 
-    protected class Genre(name: String, val value: String) : Filter.TriState(name)
+    protected class Genre(
+        name: String,
+        val value: String,
+        state: Int = STATE_IGNORE
+    ) : Filter.TriState(name, state)
+
     protected class GenreListFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
 
     private var genrelist: List<Genre>? = null

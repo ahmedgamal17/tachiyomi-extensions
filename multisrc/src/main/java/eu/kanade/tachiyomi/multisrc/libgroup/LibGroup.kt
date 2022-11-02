@@ -124,23 +124,15 @@ abstract class LibGroup(
     }
 
     private fun fetchLatestMangaFromApi(page: Int): Observable<MangasPage> {
-        return client.newCall(POST("$baseUrl/latest-updates?page=$page", catalogHeaders()))
+        return client.newCall(POST("$baseUrl/filterlist?dir=desc&sort=last_chapter_at&page=$page", catalogHeaders()))
             .asObservableSuccess()
             .map { response ->
                 latestUpdatesParse(response)
             }
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val resBody = response.body!!.string()
-        val result = json.decodeFromString<JsonObject>(resBody)
-        val itemsLatest = result["data"]?.jsonArray?.map { popularMangaFromElement(it) }
-        if (itemsLatest != null) {
-            val hasNextPage = result["next_page_url"]?.jsonPrimitive?.contentOrNull != null
-            return MangasPage(itemsLatest, hasNextPage)
-        }
-        return MangasPage(emptyList(), false)
-    }
+    override fun latestUpdatesParse(response: Response) =
+        popularMangaParse(response)
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
@@ -186,7 +178,7 @@ abstract class LibGroup(
             isEng.equals("eng") && el.jsonObject["eng_name"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() -> el.jsonObject["eng_name"]!!.jsonPrimitive.content
             else -> el.jsonObject["name"]!!.jsonPrimitive.content
         }
-        thumbnail_url = if (el.jsonObject["covers"] != null) baseUrl + el.jsonObject["covers"]!!.jsonObject["default"]!!.jsonPrimitive.content
+        thumbnail_url = if (el.jsonObject["coverImage"] != null) baseUrl + el.jsonObject["coverImage"]!!.jsonPrimitive.content
         else baseUrl + "/uploads/cover/" + slug + "/cover/" + el.jsonObject["cover"]!!.jsonPrimitive.content + "_250x350.jpg"
         url = "/$slug"
     }
@@ -313,7 +305,7 @@ abstract class LibGroup(
             sortChaptersByTranslator(sortingList, chaptersList, slug, branches)
         } else {
             chaptersList
-                ?.filter { it.jsonObject["status"]?.jsonPrimitive?.intOrNull != 2 }
+                ?.filter { it.jsonObject["status"]?.jsonPrimitive?.intOrNull != 2 && it.jsonObject["price"]?.jsonPrimitive?.intOrNull == 0 }
                 ?.map { chapterFromElement(it, sortingList, slug, null, null, teams, chaptersList) }
         }
 
@@ -471,7 +463,7 @@ abstract class LibGroup(
 
     private fun checkImage(url: String): Boolean {
         val response = client.newCall(Request.Builder().url(url).head().headers(headers).build()).execute()
-        return response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 320)
+        return response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 600)
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> {

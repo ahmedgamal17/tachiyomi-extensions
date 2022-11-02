@@ -1,16 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.remanga
 
-import BookDto
-import BranchesDto
-import ChunksPageDto
-import LibraryDto
-import MangaDetDto
-import MyLibraryDto
-import PageDto
-import PageWrapperDto
-import SeriesWrapperDto
-import TagsDto
-import UserDto
 import android.annotation.SuppressLint
 import android.annotation.TargetApi
 import android.app.Application
@@ -18,6 +7,17 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.widget.Toast
 import androidx.preference.ListPreference
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.BookDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.BranchesDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.ChunksPageDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.LibraryDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.MangaDetDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.MyLibraryDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.PageDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.PageWrapperDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.SeriesWrapperDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.TagsDto
+import eu.kanade.tachiyomi.extension.ru.remanga.dto.UserDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -47,6 +47,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -57,6 +58,8 @@ import kotlin.random.Random
 class Remanga : ConfigurableSource, HttpSource() {
 
     override val name = "Remanga"
+
+    override val id: Long = 8983242087533137528
 
     override val lang = "ru"
 
@@ -88,6 +91,9 @@ class Remanga : ConfigurableSource, HttpSource() {
             ?.let { cookie -> URLDecoder.decode(cookie.value, "UTF-8") }
             ?.let { jsonString -> json.decodeFromString<UserDto>(jsonString) }
             ?: return chain.proceed(request)
+
+        if (authCookie.access_token == null)
+            throw IOException("Авторизация слетела. Очистите cookies и переавторизуйтесь.")
 
         USER_ID = authCookie.id.toString()
         val authRequest = request.newBuilder()
@@ -153,7 +159,6 @@ class Remanga : ConfigurableSource, HttpSource() {
                         thumbnail_url = "$baseUrl/icon.png"
                     }
                 )
-
             return MangasPage(mangas, page.props.page < page.props.total_pages)
         }
     }
@@ -340,17 +345,17 @@ class Remanga : ConfigurableSource, HttpSource() {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val branch = branches.getOrElse(manga.title) { mangaBranches(manga) }
         return when {
+            manga.status == SManga.LICENSED && branch.isEmpty() -> {
+                Observable.error(Exception("Лицензировано - Нет глав"))
+            }
             branch.isEmpty() -> {
                 return Observable.just(listOf())
-            }
-            manga.status == SManga.LICENSED -> {
-                Observable.error(Exception("Лицензировано - Нет глав"))
             }
             else -> {
                 val selectedBranch = branch.maxByOrNull { selector(it) }!!
                 return (1..(selectedBranch.count_chapters / 100 + 1)).map {
                     val response = chapterListRequest(selectedBranch.id, it)
-                    chapterListParse(response)
+                    chapterListParse(response, manga)
                 }.let { Observable.just(it.flatten()) }
             }
         }
@@ -381,7 +386,9 @@ class Remanga : ConfigurableSource, HttpSource() {
         return chapterName
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("chapterListParse(response: Response, manga: SManga)")
+
+    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         var chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body!!.string()).content
         if (!preferences.getBoolean(PAID_PREF, false)) {
             chapters = chapters.filter { !it.is_paid or (it.is_bought == true) }
@@ -390,7 +397,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             SChapter.create().apply {
                 chapter_number = chapter.chapter.split(".").take(2).joinToString(".").toFloat()
                 name = chapterName(chapter)
-                url = "/api/titles/chapters/${chapter.id}"
+                url = "/manga/${manga.url.substringAfterLast("/api/titles/")}ch${chapter.id}"
                 date_upload = parseDate(chapter.upload_date)
                 scanlator = if (chapter.publishers.isNotEmpty()) {
                     chapter.publishers.joinToString { it.name }
@@ -425,6 +432,10 @@ class Remanga : ConfigurableSource, HttpSource() {
             }
             return result
         }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET(baseUrl + "/api/titles/chapters/" + chapter.url.substringAfterLast("/ch"), headers)
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)

@@ -1,3 +1,5 @@
+package eu.kanade.tachiyomi.extension.ru.newbie.dto
+
 import kotlinx.serialization.Serializable
 
 // Catalog API
@@ -44,13 +46,7 @@ data class AuthorDto(
 
 @Serializable
 data class ImgDto(
-    val srcset: ImgsDto,
-)
-
-@Serializable
-data class ImgsDto(
-    val large: String,
-    val small: String,
+    val name: String,
 )
 
 @Serializable

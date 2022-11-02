@@ -15,16 +15,20 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Request
 import okhttp3.Response
+import okio.blackholeSink
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
-import rx.Single
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.util.TimeZone
+import kotlin.math.min
 
 open class Kemono(
     override val name: String,
@@ -33,7 +37,12 @@ open class Kemono(
 ) : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
+    private val isNewDesign get() = name == "Kemono"
+
     override val client = network.client.newBuilder().rateLimit(2).build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -69,16 +78,87 @@ open class Kemono(
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Single.create<MangasPage> { subscriber ->
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        if (!isNewDesign) return super.fetchPopularManga(page)
+        return Observable.fromCallable {
+            fetchNewDesignListing(page, "/artists", compareByDescending { it.favorited })
+        }
+    }
+
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        if (!isNewDesign) return super.fetchLatestUpdates(page)
+        return Observable.fromCallable {
+            fetchNewDesignListing(page, "/artists/updated", compareByDescending { it.updatedDate })
+        }
+    }
+
+    private fun fetchNewDesignListing(
+        page: Int,
+        path: String,
+        comparator: Comparator<KemonoCreatorDto>,
+    ): MangasPage {
+        val baseUrl = baseUrl
+        return if (page == 1) {
+            val document = client.newCall(GET(baseUrl + path, headers)).execute().asJsoup()
+            val cardList = document.selectFirst(Evaluator.Class("card-list__items"))
+            val creators = cardList.children().map {
+                SManga.create().apply {
+                    url = it.attr("href")
+                    title = it.selectFirst(Evaluator.Class("user-card__name")).ownText()
+                    author = it.selectFirst(Evaluator.Class("user-card__service")).ownText()
+                    thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img")).attr("src")
+                    description = PROMPT
+                    initialized = true
+                }
+            }.filterUnsupported()
+            MangasPage(creators, true).also { cacheCreators() }
+        } else {
+            fetchCreatorsPage(page) { it.apply { sortWith(comparator) } }
+        }
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+        if (query.isBlank()) throw Exception("Query is empty")
+        fetchCreatorsPage(page) { all ->
+            val result = all.filterTo(ArrayList()) { it.name.contains(query, ignoreCase = true) }
+            if (result.isEmpty()) return@fetchCreatorsPage emptyList()
+            if (result[0].favorited != -1) {
+                result.sortByDescending { it.favorited }
+            } else {
+                result.sortByDescending { it.updatedDate }
+            }
+            result
+        }
+    }
+
+    private fun fetchCreatorsPage(
+        page: Int,
+        block: (ArrayList<KemonoCreatorDto>) -> List<KemonoCreatorDto>,
+    ): MangasPage {
         val baseUrl = this.baseUrl
         val response = client.newCall(GET("$baseUrl/api/creators", headers)).execute()
-        val result = response.parseAs<List<KemonoCreatorDto>>()
-            .filter { it.name.contains(query, ignoreCase = true) }
-            .sortedByDescending { it.updatedDate }
+        val allCreators = block(response.parseAs())
+        val count = allCreators.size
+        val fromIndex = (page - 1) * NEW_PAGE_SIZE
+        val toIndex = min(count, fromIndex + NEW_PAGE_SIZE)
+        val creators = allCreators.subList(fromIndex, toIndex)
             .map { it.toSManga(baseUrl) }
             .filterUnsupported()
-        subscriber.onSuccess(MangasPage(result, false))
-    }.toObservable()
+        return MangasPage(creators, toIndex < count)
+    }
+
+    private fun cacheCreators() {
+        val callback = object : Callback {
+            override fun onResponse(call: Call, response: Response) =
+                response.body!!.source().run {
+                    readAll(blackholeSink())
+                    close()
+                }
+
+            override fun onFailure(call: Call, e: IOException) = Unit
+        }
+        client.newCall(GET("$baseUrl/api/creators", headers)).enqueue(callback)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("Not used.")
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException("Not used.")
@@ -87,7 +167,7 @@ open class Kemono(
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException("Not used.")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Single.create<List<SChapter>> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         KemonoPostDto.dateFormat.timeZone = when (manga.author) {
             "Pixiv Fanbox", "Fantia" -> TimeZone.getTimeZone("GMT+09:00")
             else -> TimeZone.getTimeZone("GMT")
@@ -104,8 +184,8 @@ open class Kemono(
             offset += POST_PAGE_SIZE
             hasNextPage = page.size == POST_PAGE_SIZE
         }
-        it.onSuccess(result)
-    }.toObservable()
+        result
+    }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException("Not used.")
 
@@ -138,6 +218,7 @@ open class Kemono(
 
     companion object {
         private const val PAGE_SIZE = 25
+        private const val NEW_PAGE_SIZE = 50
         const val PROMPT = "You can change how many posts to load in the extension preferences."
 
         private const val POST_PAGE_SIZE = 50

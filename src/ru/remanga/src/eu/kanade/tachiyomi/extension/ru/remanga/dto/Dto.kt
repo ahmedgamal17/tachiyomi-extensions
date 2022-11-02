@@ -1,3 +1,5 @@
+package eu.kanade.tachiyomi.extension.ru.remanga.dto
+
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -114,5 +116,5 @@ data class ChunksPageDto(
 @Serializable
 data class UserDto(
     val id: Long,
-    val access_token: String
+    val access_token: String? = null
 )

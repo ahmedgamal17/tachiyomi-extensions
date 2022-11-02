@@ -3,21 +3,26 @@ package eu.kanade.tachiyomi.extension.id.komikcast
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class KomikCast : MangaThemesia(
     "Komik Cast",
-    baseUrl = "https://komikcast.me",
+    baseUrl = "https://komikcast.site",
     "id",
     mangaUrlDirectory = "/daftar-komik"
 ) {
@@ -69,13 +74,51 @@ class KomikCast : MangaThemesia(
 
     override fun chapterListSelector() = "div.komik_info-chapters li"
 
-    override fun chapterFromElement(element: Element) = super.chapterFromElement(element).apply {
-        date_upload = element.selectFirst(".chapter-link-time")?.text().parseChapterDate()
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val urlElements = element.select("a")
+        setUrlWithoutDomain(urlElements.attr("href"))
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first().text() }
+        date_upload = parseChapterDate2(element.select(".chapter-link-time").text())
+    }
+
+    private fun parseChapterDate2(date: String): Long {
+        return if (date.endsWith("ago")) {
+            val value = date.split(' ')[0].toInt()
+            when {
+                "min" in date -> Calendar.getInstance().apply {
+                    add(Calendar.MINUTE, value * -1)
+                }.timeInMillis
+                "hour" in date -> Calendar.getInstance().apply {
+                    add(Calendar.HOUR_OF_DAY, value * -1)
+                }.timeInMillis
+                "day" in date -> Calendar.getInstance().apply {
+                    add(Calendar.DATE, value * -1)
+                }.timeInMillis
+                "week" in date -> Calendar.getInstance().apply {
+                    add(Calendar.DATE, value * 7 * -1)
+                }.timeInMillis
+                "month" in date -> Calendar.getInstance().apply {
+                    add(Calendar.MONTH, value * -1)
+                }.timeInMillis
+                "year" in date -> Calendar.getInstance().apply {
+                    add(Calendar.YEAR, value * -1)
+                }.timeInMillis
+                else -> {
+                    0L
+                }
+            }
+        } else {
+            try {
+                dateFormat.parse(date)?.time ?: 0
+            } catch (_: Exception) {
+                0L
+            }
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
         var doc = document
-        var cssQuery = "div#chapter_body .main-reading-area img.size-full"
+        var cssQuery = "div#chapter_body .main-reading-area img"
         val imageListRegex = Regex("chapterImages = (.*) \\|\\|")
         val imageListMatchResult = imageListRegex.find(document.toString())
 
@@ -95,4 +138,98 @@ class KomikCast : MangaThemesia(
     }
 
     override val hasProjectPage: Boolean = true
+    override val projectPageString = "/project-list"
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+
+        if (query.isNotEmpty()) {
+            url.addPathSegments("page/$page/").addQueryParameter("s", query)
+        } else {
+            url.addPathSegment(mangaUrlDirectory.substring(1)).addPathSegments("page/$page/")
+        }
+
+        filters.forEach { filter ->
+            when (filter) {
+                is StatusFilter -> {
+                    url.addQueryParameter("status", filter.selectedValue())
+                }
+                is TypeFilter -> {
+                    url.addQueryParameter("type", filter.selectedValue())
+                }
+                is OrderByFilter -> {
+                    url.addQueryParameter("orderby", filter.selectedValue())
+                }
+                is GenreListFilter -> {
+                    filter.state
+                        .filter { it.state != Filter.TriState.STATE_IGNORE }
+                        .forEach {
+                            val value = if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
+                            url.addQueryParameter("genre[]", value)
+                        }
+                }
+                // if site has project page, default value "hasProjectPage" = false
+                is ProjectFilter -> {
+                    if (filter.selectedValue() == "project-filter-on") {
+                        url.setPathSegment(0, projectPageString.substring(1))
+                    }
+                }
+                else -> { /* Do Nothing */ }
+            }
+        }
+        return GET(url.toString())
+    }
+
+    private class StatusFilter : SelectFilter(
+        "Status",
+        arrayOf(
+            Pair("All", ""),
+            Pair("Ongoing", "ongoing"),
+            Pair("Completed", "completed")
+        )
+    )
+
+    private class TypeFilter : SelectFilter(
+        "Type",
+        arrayOf(
+            Pair("All", ""),
+            Pair("Manga", "manga"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Manhua", "manhua")
+        )
+    )
+
+    private class OrderByFilter(defaultOrder: String? = null) : SelectFilter(
+        "Sort By",
+        arrayOf(
+            Pair("Default", ""),
+            Pair("A-Z", "titleasc"),
+            Pair("Z-A", "titledesc"),
+            Pair("Update", "update"),
+            Pair("Popular", "popular")
+        ),
+        defaultOrder
+    )
+
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>(
+            Filter.Separator(),
+            StatusFilter(),
+            TypeFilter(),
+            OrderByFilter(),
+            Filter.Header("Genre exclusion is not available for all sources"),
+            GenreListFilter(getGenreList()),
+        )
+        if (hasProjectPage) {
+            filters.addAll(
+                mutableListOf<Filter<*>>(
+                    Filter.Separator(),
+                    Filter.Header("NOTE: Can't be used with other filter!"),
+                    Filter.Header("$name Project List page"),
+                    ProjectFilter(),
+                )
+            )
+        }
+        return FilterList(filters)
+    }
 }
