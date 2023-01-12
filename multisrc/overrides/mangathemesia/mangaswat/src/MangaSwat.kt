@@ -14,6 +14,7 @@ class MangaSwat : MangaThemesia(
     "MangaSwat",
     "https://swatmanga.me",
     "ar",
+    mangaUrlDirectory = "/manga",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 ) {
 
