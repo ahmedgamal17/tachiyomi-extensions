@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.multisrc.kemono
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -11,9 +13,13 @@ class KemonoCreatorDto(
     private val id: String,
     val name: String,
     private val service: String,
-    private val updated: String,
+    private val updated: JsonPrimitive,
+    val favorited: Int = -1,
 ) {
-    val updatedDate get() = dateFormat.parse(updated)?.time ?: 0
+    val updatedDate get() = when {
+        updated.isString -> dateFormat.parse(updated.content)?.time ?: 0
+        else -> (updated.double * 1000).toLong()
+    }
 
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = "/$service/user/$id" // should be /server/ for Discord but will be filtered anyway
@@ -51,32 +57,47 @@ class KemonoPostDto(
 ) {
     val images: List<String>
         get() = buildList(attachments.size + 1) {
-            file.path?.let { add(it) }
-            attachments.mapTo(this) { it.path }
+            if (file.path != null) add(KemonoAttachmentDto(file.name!!, file.path))
+            addAll(attachments)
         }.filter {
-            when (it.substringAfterLast('.').lowercase()) {
+            when (it.name.substringAfterLast('.').lowercase()) {
                 "png", "jpg", "gif", "jpeg", "webp" -> true
                 else -> false
             }
-        }.distinct()
+        }.distinctBy { it.path }.map { it.toString() }
 
     fun toSChapter() = SChapter.create().apply {
+        val postDate = dateFormat.parse(edited ?: published ?: added)
+
         url = "/$service/user/$user/post/$id"
-        name = title
-        date_upload = dateFormat.parse(edited ?: published ?: added)?.time ?: 0
+        date_upload = postDate?.time ?: 0
+        name = title.ifBlank {
+            val postDateString = when {
+                postDate != null && postDate.time != 0L -> chapterNameDateFormat.format(postDate)
+                else -> "unknown date"
+            }
+
+            "Post from $postDateString"
+        }
         chapter_number = -2f
     }
 
     companion object {
         val dateFormat by lazy { getApiDateFormat() }
+        val chapterNameDateFormat by lazy { getChapterNameDateFormat() }
     }
 }
 
 @Serializable
-class KemonoFileDto(val path: String? = null)
+class KemonoFileDto(val name: String? = null, val path: String? = null)
 
 @Serializable
-class KemonoAttachmentDto(val path: String)
+class KemonoAttachmentDto(val name: String, val path: String) {
+    override fun toString() = "$path?f=$name"
+}
 
 private fun getApiDateFormat() =
     SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
+
+private fun getChapterNameDateFormat() =
+    SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss", Locale.ENGLISH)

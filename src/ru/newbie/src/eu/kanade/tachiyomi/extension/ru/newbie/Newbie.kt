@@ -1,15 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.newbie
 
-import BookDto
-import BranchesDto
-import LibraryDto
-import MangaDetDto
-import PageDto
-import PageWrapperDto
-import SearchLibraryDto
-import SearchWrapperDto
-import SeriesWrapperDto
-import SubSearchDto
 import android.annotation.SuppressLint
 import android.annotation.TargetApi
 import android.app.Application
@@ -17,9 +7,20 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.widget.Toast
 import androidx.preference.ListPreference
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.BookDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.BranchesDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.LibraryDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.MangaDetDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.PageDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.PageWrapperDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.SearchLibraryDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.SearchWrapperDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.SeriesWrapperDto
+import eu.kanade.tachiyomi.extension.ru.newbie.dto.SubSearchDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -31,6 +32,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -48,6 +50,8 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 class Newbie : ConfigurableSource, HttpSource() {
     override val name = "NewManga(Newbie)"
@@ -66,8 +70,10 @@ class Newbie : ConfigurableSource, HttpSource() {
 
     private var branches = mutableMapOf<String, List<BranchesDto>>()
 
+    private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
+
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Tachiyomi " + System.getProperty("http.agent"))
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.$userAgentRandomizer")
         .add("Referer", baseUrl)
 
     private fun imageContentTypeIntercept(chain: Interceptor.Chain): Response {
@@ -81,7 +87,8 @@ class Newbie : ConfigurableSource, HttpSource() {
     }
 
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
+            .rateLimitHost(API_URL.toHttpUrl(), 2)
             .addInterceptor { imageContentTypeIntercept(it) }
             .build()
 
@@ -103,9 +110,7 @@ class Newbie : ConfigurableSource, HttpSource() {
             // Do not change the title name to ensure work with a multilingual catalog!
             title = if (isEng.equals("rus")) o.title.ru else o.title.en
             url = "$id"
-            thumbnail_url = if (image.srcset.large.isNotEmpty()) {
-                "$IMAGE_URL/${image.srcset.large}"
-            } else "$IMAGE_URL/${image.srcset.small}"
+            thumbnail_url = "$IMAGE_URL/${image.name}"
         }
     }
 
@@ -254,7 +259,7 @@ class Newbie : ConfigurableSource, HttpSource() {
             // Do not change the title name to ensure work with a multilingual catalog!
             title = if (isEng.equals("rus")) o.title.ru else o.title.en
             url = "$id"
-            thumbnail_url = "$IMAGE_URL/${image.srcset.large}"
+            thumbnail_url = "$IMAGE_URL/${image.name}"
             author = o.author?.name
             artist = o.artist?.name
             val mediaNameLanguage = if (isEng.equals("rus")) o.title.en else o.title.ru
@@ -320,13 +325,15 @@ class Newbie : ConfigurableSource, HttpSource() {
                 client.newCall(chapterListRequest(branchId))
                     .asObservableSuccess()
                     .map { response ->
-                        chapterListParse(response)
+                        chapterListParse(response, manga, branchId)
                     }
             }
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("chapterListParse(response: Response, manga: SManga)")
+
+    private fun chapterListParse(response: Response, manga: SManga, branch: Long): List<SChapter> {
         var chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body!!.string()).items
         if (!preferences.getBoolean(PAID_PREF, false)) {
             chapters = chapters.filter { it.is_available }
@@ -335,13 +342,13 @@ class Newbie : ConfigurableSource, HttpSource() {
             SChapter.create().apply {
                 chapter_number = chapter.number
                 name = chapterName(chapter)
-                url = "/chapters/${chapter.id}/pages"
+                url = "/p/${manga.url}/$branch/r/${chapter.id}"
                 date_upload = parseDate(chapter.created_at)
                 scanlator = chapter.translator
             }
         }
     }
-    override fun chapterListRequest(manga: SManga): Request = throw NotImplementedError("Unused")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException("chapterListRequest(branch: Long)")
     private fun chapterListRequest(branch: Long): Request {
         return GET(
             "$API_URL/branches/$branch/chapters?reverse=true&size=1000000",
@@ -351,15 +358,15 @@ class Newbie : ConfigurableSource, HttpSource() {
 
     @TargetApi(Build.VERSION_CODES.N)
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(API_URL + chapter.url, headers)
+        return GET(API_URL + "/chapters/${chapter.url.substringAfterLast("/")}/pages", headers)
     }
 
-    private fun pageListParse(response: Response, chapter: SChapter): List<Page> {
+    private fun pageListParse(response: Response, urlRequest: String): List<Page> {
         val pages = json.decodeFromString<List<PageDto>>(response.body?.string()!!)
         val result = mutableListOf<Page>()
         pages.forEach { page ->
             (1..page.slices!!).map { i ->
-                result.add(Page(result.size, API_URL + chapter.url + "/${page.id}?slice=$i"))
+                result.add(Page(result.size, urlRequest + "/${page.id}?slice=$i"))
             }
         }
         return result
@@ -370,16 +377,12 @@ class Newbie : ConfigurableSource, HttpSource() {
         return client.newCall(pageListRequest(chapter))
             .asObservableSuccess()
             .map { response ->
-                pageListParse(response, chapter)
+                pageListParse(response, pageListRequest(chapter).url.toString())
             }
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> {
-        val bodyLength = client.newCall(GET(page.url, headers)).execute().body!!.contentLength()
-        return if (bodyLength > 320)
-            Observable.just(page.url)
-        else
-            Observable.just("$baseUrl/error-page/img/logo-fullsize.png")
+        return Observable.just(page.url)
     }
 
     override fun imageUrlRequest(page: Page): Request = throw NotImplementedError("Unused")

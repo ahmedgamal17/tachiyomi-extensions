@@ -5,7 +5,8 @@ import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import app.cash.quickjs.QuickJs
+import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
+import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -463,18 +464,13 @@ open class BatoTo(
         val batoWord = script.substringAfter("const batoWord =").substringBefore(";").trim()
         val batoPass = script.substringAfter("const batoPass =").substringBefore(";").trim()
 
-        val decryptScript = cryptoJS + "CryptoJS.AES.decrypt($batoWord, $batoPass).toString(CryptoJS.enc.Utf8);"
-
-        val imgAccListString = QuickJs.create().use { it.evaluate(decryptScript).toString() }
+        val evaluatedPass: String = Deobfuscator.deobfuscateJsPassword(batoPass)
+        val imgAccListString = CryptoAES.decrypt(batoWord.removeSurrounding("\""), evaluatedPass)
         val imgAccList = json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
 
         return imgHttpLis.zip(imgAccList).mapIndexed { i, (imgUrl, imgAcc) ->
             Page(i, imageUrl = "$imgUrl?$imgAcc")
         }
-    }
-
-    private val cryptoJS by lazy {
-        client.newCall(GET(CryptoJSUrl, headers)).execute().body!!.string()
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
@@ -701,30 +697,41 @@ open class BatoTo(
         TriStateFilterOption("manhwa", "Manhwa"),
         TriStateFilterOption("webtoon", "Webtoon"),
         TriStateFilterOption("western", "Western"),
-        TriStateFilterOption("josei", "Josei"),
-        TriStateFilterOption("seinen", "Seinen"),
-        TriStateFilterOption("shoujo", "Shoujo"),
-        TriStateFilterOption("shoujo_ai", "Shoujo ai"),
-        TriStateFilterOption("shounen", "Shounen"),
-        TriStateFilterOption("shounen_ai", "Shounen ai"),
-        TriStateFilterOption("yaoi", "Yaoi"),
-        TriStateFilterOption("yuri", "Yuri"),
-        TriStateFilterOption("ecchi", "Ecchi"),
-        TriStateFilterOption("mature", "Mature"),
-        TriStateFilterOption("adult", "Adult"),
+        
+        TriStateFilterOption("shoujo", "Shoujo(G)"),
+        TriStateFilterOption("shounen", "Shounen(B)"),
+        TriStateFilterOption("josei", "Josei(W)"),
+        TriStateFilterOption("seinen", "Seinen(M)"),
+        TriStateFilterOption("yuri", "Yuri(GL)"),
+        TriStateFilterOption("yaoi", "Yaoi(BL)"),
+        TriStateFilterOption("futa", "Futa(WL)"),
+        TriStateFilterOption("bara", "Bara(ML)"),
+        
         TriStateFilterOption("gore", "Gore"),
+        TriStateFilterOption("bloody", "Bloody"),
         TriStateFilterOption("violence", "Violence"),
+        TriStateFilterOption("ecchi", "Ecchi"),
+        TriStateFilterOption("adult", "Adult"),
+        TriStateFilterOption("mature", "Mature"),
         TriStateFilterOption("smut", "Smut"),
         TriStateFilterOption("hentai", "Hentai"),
+        
         TriStateFilterOption("_4_koma", "4-Koma"),
         TriStateFilterOption("action", "Action"),
         TriStateFilterOption("adaptation", "Adaptation"),
         TriStateFilterOption("adventure", "Adventure"),
+        TriStateFilterOption("age_gap", "Age Gap"),
         TriStateFilterOption("aliens", "Aliens"),
         TriStateFilterOption("animals", "Animals"),
         TriStateFilterOption("anthology", "Anthology"),
+        TriStateFilterOption("beasts", "Beasts"),
+        TriStateFilterOption("bodyswap", "Bodyswap"),
         TriStateFilterOption("cars", "cars"),
+        TriStateFilterOption("cheating_infidelity", "Cheating/Infidelity"),
+        TriStateFilterOption("childhood_friends", "Childhood Friends"),
+        TriStateFilterOption("college_life", "College Life"),
         TriStateFilterOption("comedy", "Comedy"),
+        TriStateFilterOption("contest_winning", "Contest Winning"),
         TriStateFilterOption("cooking", "Cooking"),
         TriStateFilterOption("crime", "crime"),
         TriStateFilterOption("crossdressing", "Crossdressing"),
@@ -732,8 +739,11 @@ open class BatoTo(
         TriStateFilterOption("dementia", "Dementia"),
         TriStateFilterOption("demons", "Demons"),
         TriStateFilterOption("drama", "Drama"),
+        TriStateFilterOption("dungeons", "Dungeons"),
+        TriStateFilterOption("emperor_daughte", "Emperor's Daughter"),
         TriStateFilterOption("fantasy", "Fantasy"),
         TriStateFilterOption("fan_colored", "Fan-Colored"),
+        TriStateFilterOption("fetish", "Fetish"),
         TriStateFilterOption("full_color", "Full Color"),
         TriStateFilterOption("game", "Game"),
         TriStateFilterOption("gender_bender", "Gender Bender"),
@@ -748,7 +758,6 @@ open class BatoTo(
         TriStateFilterOption("isekai", "Isekai"),
         TriStateFilterOption("kids", "Kids"),
         TriStateFilterOption("loli", "Loli"),
-        TriStateFilterOption("lolicon", "lolicon"),
         TriStateFilterOption("magic", "Magic"),
         TriStateFilterOption("magical_girls", "Magical Girls"),
         TriStateFilterOption("martial_arts", "Martial Arts"),
@@ -762,22 +771,29 @@ open class BatoTo(
         TriStateFilterOption("netorare", "Netorare/NTR"),
         TriStateFilterOption("ninja", "Ninja"),
         TriStateFilterOption("office_workers", "Office Workers"),
+        TriStateFilterOption("omegaverse", "Omegaverse"),
         TriStateFilterOption("oneshot", "Oneshot"),
         TriStateFilterOption("parody", "parody"),
         TriStateFilterOption("philosophical", "Philosophical"),
         TriStateFilterOption("police", "Police"),
         TriStateFilterOption("post_apocalyptic", "Post-Apocalyptic"),
         TriStateFilterOption("psychological", "Psychological"),
+        TriStateFilterOption("regression", "Regression"),
         TriStateFilterOption("reincarnation", "Reincarnation"),
         TriStateFilterOption("reverse_harem", "Reverse Harem"),
+        TriStateFilterOption("reverse_isekai", "Reverse Isekai"),
         TriStateFilterOption("romance", "Romance"),
+        TriStateFilterOption("royal_family", "Royal Family"),
+        TriStateFilterOption("royalty", "Royalty"),
         TriStateFilterOption("samurai", "Samurai"),
         TriStateFilterOption("school_life", "School Life"),
         TriStateFilterOption("sci_fi", "Sci-Fi"),
         TriStateFilterOption("shota", "Shota"),
-        TriStateFilterOption("shotacon", "shotacon"),
+        TriStateFilterOption("shoujo_ai", "Shoujo Ai"),
+        TriStateFilterOption("shounen_ai", "Shounen Ai"),
+        TriStateFilterOption("showbiz", "Showbiz"),
         TriStateFilterOption("slice_of_life", "Slice of Life"),
-        TriStateFilterOption("sm_bdsm", "SM/BDSM"),
+        TriStateFilterOption("sm_bdsm", "SM/BDSM/SUB-DOM"),
         TriStateFilterOption("space", "Space"),
         TriStateFilterOption("sports", "Sports"),
         TriStateFilterOption("super_power", "Super Power"),
@@ -786,9 +802,12 @@ open class BatoTo(
         TriStateFilterOption("survival", "Survival"),
         TriStateFilterOption("thriller", "Thriller"),
         TriStateFilterOption("time_travel", "Time Travel"),
+        TriStateFilterOption("tower_climbing", "Tower Climbing"),
         TriStateFilterOption("traditional_games", "Traditional Games"),
         TriStateFilterOption("tragedy", "Tragedy"),
+        TriStateFilterOption("transmigration", "Transmigration"),
         TriStateFilterOption("vampires", "Vampires"),
+        TriStateFilterOption("villainess", "Villainess"),
         TriStateFilterOption("video_games", "Video Games"),
         TriStateFilterOption("virtual_reality", "Virtual Reality"),
         TriStateFilterOption("wuxia", "Wuxia"),
@@ -796,6 +815,8 @@ open class BatoTo(
         TriStateFilterOption("xuanhuan", "Xuanhuan"),
         TriStateFilterOption("zombies", "Zombies"),
         // Hidden Genres
+        TriStateFilterOption("shotacon", "shotacon"),
+        TriStateFilterOption("lolicon", "lolicon"),
         TriStateFilterOption("award_winning", "Award Winning"),
         TriStateFilterOption("youkai", "Youkai"),
         TriStateFilterOption("uncategorized", "Uncategorized")
@@ -912,8 +933,6 @@ open class BatoTo(
     ).filterNot { it.value == siteLang }
 
     companion object {
-        const val CryptoJSUrl = "https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"
-
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private val MIRROR_PREF_ENTRIES = arrayOf(

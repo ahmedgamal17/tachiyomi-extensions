@@ -1,6 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.bilibili
 
-class BilibiliIntl(lang: String) {
+import java.text.DateFormatSymbols
+import java.text.NumberFormat
+import java.util.Locale
+
+class BilibiliIntl(private val lang: String) {
+
+    private val locale by lazy { Locale.forLanguageTag(lang) }
+
+    private val dateFormatSymbols by lazy { DateFormatSymbols(locale) }
+
+    private val numberFormat by lazy { NumberFormat.getInstance(locale) }
 
     val statusLabel: String = when (lang) {
         CHINESE, SIMPLIFIED_CHINESE -> "进度"
@@ -33,24 +43,20 @@ class BilibiliIntl(lang: String) {
         else -> "Price"
     }
 
-    val episodePrefix: String = when (lang) {
-        CHINESE, SIMPLIFIED_CHINESE -> ""
-        SPANISH -> "Cap. "
-        else -> "Ep. "
-    }
-
-    val hasPaidChaptersWarning: String = when (lang) {
+    fun hasPaidChaptersWarning(chapterCount: Int): String = when (lang) {
         CHINESE, SIMPLIFIED_CHINESE ->
-            "${Bilibili.EMOJI_WARNING} 此漫画的付费章节已从章节列表中过滤。如果您已购买章节，请在 WebView " +
-                "登录并刷新章节列表以阅读已购章节。"
+            "${Bilibili.EMOJI_WARNING} 此漫画有 ${chapterCount.localized} 个付费章节，已在目录中隐藏。" +
+                "如果你已购买，请在 WebView 登录并刷新目录，即可阅读已购章节。"
         SPANISH ->
-            "${Bilibili.EMOJI_WARNING} ADVERTENCIA: Esta serie tiene capítulos pagos que fueron " +
-                "filtrados de la lista de capítulos. Si ya compró y tiene alguno en su cuenta, " +
-                "inicie sesión en WebView y actualice la lista de capítulos para leerlos."
+            "${Bilibili.EMOJI_WARNING} ADVERTENCIA: Esta serie tiene ${chapterCount.localized} " +
+                "capítulos pagos que fueron filtrados de la lista de capítulos. Si ya has " +
+                "desbloqueado y tiene alguno en su cuenta, inicie sesión en WebView y " +
+                "actualice la lista de capítulos para leerlos."
         else ->
-            "${Bilibili.EMOJI_WARNING} WARNING: This series has paid chapters that were filtered " +
-                "out from the chapter list. If you have already bought and have any in your " +
-                "account, sign in through WebView and refresh the chapter list to read them."
+            "${Bilibili.EMOJI_WARNING} WARNING: This series has ${chapterCount.localized} paid " +
+                "chapters that were filtered out from the chapter list. If you have already " +
+                "unlocked and have any in your account, sign in through WebView and refresh " +
+                "the chapter list to read them."
     }
 
     val imageQualityPrefTitle: String = when (lang) {
@@ -61,8 +67,8 @@ class BilibiliIntl(lang: String) {
     }
 
     val imageQualityPrefEntries: Array<String> = when (lang) {
-        CHINESE, SIMPLIFIED_CHINESE -> arrayOf("原图", "高", "低")
-        else -> arrayOf("Raw", "HD", "SD")
+        CHINESE, SIMPLIFIED_CHINESE -> arrayOf("原图", "高清 (1600w)", "标清 (1000w)", "低清 (800w)")
+        else -> arrayOf("Raw", "HD (1600w)", "SD (1000w)", "Low (800w)")
     }
 
     val imageFormatPrefTitle: String = when (lang) {
@@ -83,6 +89,7 @@ class BilibiliIntl(lang: String) {
         CHINESE, SIMPLIFIED_CHINESE -> "人气推荐"
         INDONESIAN -> "Populer"
         SPANISH -> "Popularidad"
+        FRENCH -> "Préférences"
         else -> "Popular"
     }
 
@@ -90,6 +97,7 @@ class BilibiliIntl(lang: String) {
         CHINESE, SIMPLIFIED_CHINESE -> "更新时间"
         INDONESIAN -> "Terbaru"
         SPANISH -> "Actualización"
+        FRENCH -> "Récent"
         else -> "Updated"
     }
 
@@ -107,6 +115,7 @@ class BilibiliIntl(lang: String) {
         CHINESE, SIMPLIFIED_CHINESE -> "全部"
         INDONESIAN -> "Semua"
         SPANISH -> "Todos"
+        FRENCH -> "Tout"
         else -> "All"
     }
 
@@ -114,6 +123,7 @@ class BilibiliIntl(lang: String) {
         CHINESE, SIMPLIFIED_CHINESE -> "连载中"
         INDONESIAN -> "Berlangsung"
         SPANISH -> "En curso"
+        FRENCH -> "En cours"
         else -> "Ongoing"
     }
 
@@ -121,6 +131,7 @@ class BilibiliIntl(lang: String) {
         CHINESE, SIMPLIFIED_CHINESE -> "已完结"
         INDONESIAN -> "Tamat"
         SPANISH -> "Finalizado"
+        FRENCH -> "Complet"
         else -> "Completed"
     }
 
@@ -162,11 +173,52 @@ class BilibiliIntl(lang: String) {
         else -> "Failed to get the credential to read the chapter."
     }
 
+    val informationTitle: String = when (lang) {
+        CHINESE, SIMPLIFIED_CHINESE -> "信息"
+        SPANISH -> "Información"
+        else -> "Information"
+    }
+
+    val totalChapterCount: String = when (lang) {
+        CHINESE, SIMPLIFIED_CHINESE -> "章节总数"
+        SPANISH -> "Número total de capítulos"
+        else -> "Total chapter count"
+    }
+
+    private val updatesDaily: String = when (lang) {
+        CHINESE, SIMPLIFIED_CHINESE -> "每日更新"
+        SPANISH -> "Actualizaciones diarias"
+        else -> "Updates daily"
+    }
+
+    private fun updatesEvery(days: String): String = when (lang) {
+        CHINESE, SIMPLIFIED_CHINESE -> "${days}更新"
+        SPANISH -> "Actualizaciones todos los $days"
+        else -> "Updates every $days"
+    }
+
+    fun getUpdateDays(dayIndexes: List<Int>): String {
+        val shortWeekDays = dateFormatSymbols.shortWeekdays.filterNot(String::isBlank)
+        if (dayIndexes.size == shortWeekDays.size) return updatesDaily
+        val shortWeekDaysUpperCased = shortWeekDays.map {
+            it.replaceFirstChar { char -> char.uppercase(locale) }
+        }
+
+        val days = dayIndexes.joinToString { shortWeekDaysUpperCased[it] }
+        return updatesEvery(days)
+    }
+
+    fun localize(value: Int) = value.localized
+
+    private val Int.localized: String
+        get() = numberFormat.format(this)
+
     companion object {
         const val CHINESE = "zh"
         const val ENGLISH = "en"
         const val INDONESIAN = "id"
         const val SIMPLIFIED_CHINESE = "zh-Hans"
         const val SPANISH = "es"
+        const val FRENCH = "fr"
     }
 }

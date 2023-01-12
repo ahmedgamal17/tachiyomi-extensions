@@ -54,7 +54,9 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            thumbnail_url = element.select(".inner_thumb img").attr("src")
+            thumbnail_url = element.selectFirst(".inner_thumb img")?.let {
+                it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
+            }
             with(element.select(".caption a")) {
                 url = this.attr("href")
                 title = this.text()
@@ -152,7 +154,9 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
 
         title = document.selectFirst("div.right_details > h1").text()
 
-        thumbnail_url = document.selectFirst("div.left_cover img").attr("abs:data-src")
+        thumbnail_url = document.selectFirst("div.left_cover img")?.let {
+            it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
+        }
 
         val mangaInfoElement = document.select(".galleries_info")
         val infoMap = mangaInfoElement.select("li:not(.pages)").map {
@@ -213,7 +217,8 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
             in 403819..527143 -> "m3.imhentai.xxx"
             in 527144..632481 -> "m4.imhentai.xxx"
             in 632482..816010 -> "m5.imhentai.xxx"
-            else -> "m6.imhentai.xxx"
+            in 816011..970098 -> "m6.imhentai.xxx"
+            else -> "m7.imhentai.xxx"
         }
 
         val images = json.parseToJsonElement(
