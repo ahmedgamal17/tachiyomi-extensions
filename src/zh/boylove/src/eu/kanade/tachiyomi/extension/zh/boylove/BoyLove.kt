@@ -21,12 +21,14 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.concurrent.thread
 
+// Uses MACCMS http://www.maccms.la/
 // 支持站点，不要添加屏蔽广告选项，何况广告本来就不多
 class BoyLove : HttpSource(), ConfigurableSource {
     override val name = "香香腐宅"
@@ -35,13 +37,16 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    override val baseUrl = run {
+        val preferences: SharedPreferences =
+            Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val baseUrl = "https://" + preferences.getString(MIRROR_PREF, "0")!!.toInt()
-        .coerceIn(0, MIRRORS.size - 1).let { MIRRORS[it] }
+        val mirrors = MIRRORS
+        val index = preferences.getString(MIRROR_PREF, "0")!!.toInt().coerceIn(0, mirrors.size - 1)
+        "https://" + mirrors[index]
+    }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 
@@ -93,12 +98,31 @@ class BoyLove : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> =
         response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        chapter.url.substringAfter(':').ifEmpty {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val chapterUrl = chapter.url
+        val index = chapterUrl.indexOf(':') // old URL format
+        if (index == -1) return fetchPageList(chapterUrl)
+        return chapterUrl.substring(index + 1).ifEmpty {
             return Observable.just(emptyList())
         }.split(',').mapIndexed { i, url ->
             Page(i, imageUrl = url.toImageUrl())
         }.let { Observable.just(it) }
+    }
+
+    private fun fetchPageList(chapterUrl: String): Observable<List<Page>> =
+        client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
+            val root = response.asJsoup().selectFirst(Evaluator.Tag("section"))
+            val images = root.select(Evaluator.Class("reader-cartoon-image"))
+            val urlList = if (images.isEmpty()) {
+                root.select(Evaluator.Tag("img")).map { it.attr("src").trim().toImageUrl() }
+                    .filterNot { it.endsWith(".gif") }
+            } else {
+                images.map { it.child(0) }
+                    .filter { it.attr("src").endsWith("load.png") }
+                    .map { it.attr("data-original").trim().toImageUrl() }
+            }
+            urlList.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+        }
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException("Not used.")
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
@@ -146,8 +170,9 @@ class BoyLove : HttpSource(), ConfigurableSource {
             key = MIRROR_PREF
             title = "镜像网址"
             summary = "选择要使用的镜像网址，重启生效"
-            entries = MIRRORS_DESC
-            entryValues = MIRROR_INDICES
+            val desc = MIRRORS_DESC
+            entries = desc
+            entryValues = Array(desc.size, Int::toString)
             setDefaultValue("0")
         }.let { screen.addPreference(it) }
     }
@@ -156,8 +181,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
         private const val MIRROR_PREF = "MIRROR"
 
         // redirect URL: https://fuhouse.club/bl
-        private val MIRRORS = arrayOf("boylove.live", "boylove3.cc", "boylove.cc")
-        private val MIRRORS_DESC = arrayOf("boylove.live (大陆地区)", "boylove3.cc", "boylove.cc (非大陆地区)")
-        private val MIRROR_INDICES = arrayOf("0", "1", "2")
+        private val MIRRORS get() = arrayOf("boylov.xyz", "boylove3.cc", "boylove.cc", "boylove1.cc", "boylove2.cc", "boylove.today")
+        private val MIRRORS_DESC get() = arrayOf("boylov.xyz", "boylove3.cc", "boylove.cc (非大陆地区)", "boylove1.cc", "boylove2.cc", "boylove.today")
     }
 }

@@ -45,7 +45,7 @@ abstract class Bilibili(
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(::expiredTokenIntercept)
+        .addInterceptor(::expiredImageTokenIntercept)
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .rateLimitHost(CDN_URL.toHttpUrl(), 2)
         .rateLimitHost(COVER_CDN_URL.toHttpUrl(), 2)
@@ -63,9 +63,9 @@ abstract class Bilibili(
         else -> lang
     }
 
-    protected open val defaultPopularSort: Int = 1
+    protected open val defaultPopularSort: Int = 0
 
-    protected open val defaultLatestSort: Int = 2
+    protected open val defaultLatestSort: Int = 1
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -75,55 +75,42 @@ abstract class Bilibili(
 
     protected open val signedIn: Boolean = false
 
-    private val chapterImageQuality: String
-        get() = preferences.getString("${IMAGE_QUALITY_PREF_KEY}_$lang", IMAGE_QUALITY_PREF_DEFAULT_VALUE)!!
-
-    private val chapterImageFormat: String
-        get() = preferences.getString("${IMAGE_FORMAT_PREF_KEY}_$lang", IMAGE_FORMAT_PREF_DEFAULT_VALUE)!!
-
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(SortFilter("", emptyArray(), defaultPopularSort)))
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters = FilterList(
+            SortFilter("", getAllSortOptions(), defaultPopularSort)
+        )
+    )
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(SortFilter("", emptyArray(), defaultLatestSort)))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters = FilterList(
+            SortFilter("", getAllSortOptions(), defaultLatestSort)
+        )
+    )
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(PREFIX_ID_SEARCH) && query.matches(ID_SEARCH_PATTERN)) {
-            val comicId = query
-                .removePrefix(PREFIX_ID_SEARCH)
-                .removePrefix("mc")
-            return mangaDetailsApiRequest("/detail/mc$comicId")
+        ID_SEARCH_PATTERN.matchEntire(query)?.let {
+            val (id) = it.destructured
+            return mangaDetailsApiRequest("/detail/mc$id")
         }
 
-        val order = filters.filterIsInstance<SortFilter>()
-            .firstOrNull()?.state ?: 0
-
-        val status = filters.filterIsInstance<StatusFilter>()
-            .firstOrNull()?.state?.minus(1) ?: -1
-
-        val price = filters.filterIsInstance<PriceFilter>()
-            .firstOrNull()?.state ?: 0
-
-        val styleId = filters.filterIsInstance<GenreFilter>()
-            .firstOrNull()?.selected?.id ?: -1
-
-        val areaId = filters.filterIsInstance<AreaFilter>()
-            .firstOrNull()?.selected?.id ?: -1
-
-        val pageSize = if (query.isBlank()) POPULAR_PER_PAGE else SEARCH_PER_PAGE
+        val price = filters.firstInstanceOrNull<PriceFilter>()?.state ?: 0
 
         val jsonPayload = buildJsonObject {
-            put("area_id", areaId)
-            put("is_finish", status)
+            put("area_id", filters.firstInstanceOrNull<AreaFilter>()?.selected?.id ?: -1)
+            put("is_finish", filters.firstInstanceOrNull<StatusFilter>()?.state?.minus(1) ?: -1)
             put("is_free", if (price == 0) -1 else price)
-            put("order", order)
+            put("order", filters.firstInstanceOrNull<SortFilter>()?.selected?.id ?: 0)
             put("page_num", page)
-            put("page_size", pageSize)
-            put("style_id", styleId)
+            put("page_size", if (query.isBlank()) POPULAR_PER_PAGE else SEARCH_PER_PAGE)
+            put("style_id", filters.firstInstanceOrNull<GenreFilter>()?.selected?.id ?: -1)
             put("style_prefer", "[]")
 
             if (query.isNotBlank()) {
@@ -151,12 +138,13 @@ abstract class Bilibili(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("ComicDetail")) {
+        val requestUrl = response.request.url.toString()
+        if (requestUrl.contains("ComicDetail")) {
             val comic = mangaDetailsParse(response)
             return MangasPage(listOf(comic), hasNextPage = false)
         }
 
-        if (response.request.url.toString().contains("ClassPage")) {
+        if (requestUrl.contains("ClassPage")) {
             val result = response.parseAs<List<BilibiliComicDto>>()
 
             if (result.code != 0) {
@@ -217,20 +205,31 @@ abstract class Bilibili(
     }
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val result = response.parseAs<BilibiliComicDto>()
-        val comic = result.data!!
+        val comic = response.parseAs<BilibiliComicDto>().data!!
 
         title = comic.title
         author = comic.authorName.joinToString()
-        status = if (comic.isFinish == 1) SManga.COMPLETED else SManga.ONGOING
         genre = comic.genres(intl.pricePaid, EMOJI_LOCKED).joinToString()
-        description = comic.classicLines
-        thumbnail_url = comic.verticalCover + THUMBNAIL_RESOLUTION
-        url = "/detail/mc" + comic.id
-
-        if (comic.hasPaidChapters && !signedIn) {
-            description = "${intl.hasPaidChaptersWarning}\n\n$description"
+        status = when {
+            comic.isFinish == 1 -> SManga.COMPLETED
+            comic.isOnHiatus -> SManga.ON_HIATUS
+            else -> SManga.ONGOING
         }
+        description = buildString {
+            if (comic.hasPaidChapters && !signedIn) {
+                append("${intl.hasPaidChaptersWarning(comic.paidChaptersCount)}\n\n")
+            }
+
+            append("${comic.classicLines}\n\n")
+            append("${intl.informationTitle}:")
+            append("\n• ${intl.totalChapterCount}: ${intl.localize(comic.episodeList.size)}")
+
+            if (comic.updateWeekdays.isNotEmpty() && status == SManga.ONGOING) {
+                append("\n• ${intl.getUpdateDays(comic.updateWeekdays)}")
+            }
+        }
+        thumbnail_url = comic.verticalCover
+        url = "/detail/mc" + comic.id
     }
 
     // Chapters are available in the same url of the manga details.
@@ -249,9 +248,8 @@ abstract class Bilibili(
     }
 
     protected open fun chapterFromObject(episode: BilibiliEpisodeDto, comicId: Int): SChapter = SChapter.create().apply {
-        name = intl.episodePrefix + episode.shortTitle +
-            (if (episode.title.isNotBlank()) " - " + episode.title else "")
-        date_upload = episode.publicationTime.substringBefore("T").toDate()
+        name = episode.shortTitle.plus(if (episode.title.isNotBlank()) " - ${episode.title}" else "")
+        date_upload = episode.publicationTime.toDate()
         url = "/mc$comicId/${episode.id}"
     }
 
@@ -288,10 +286,10 @@ abstract class Bilibili(
             return emptyList()
         }
 
-        val imageQuality = chapterImageQuality
-        val imageFormat = chapterImageFormat
+        val imageQuality = preferences.chapterImageQuality
+        val imageFormat = preferences.chapterImageFormat
 
-        val imageUrls = result.data!!.images.map { "${it.path}@$imageQuality.$imageFormat" }
+        val imageUrls = result.data!!.images.map { it.url(imageQuality, imageFormat) }
         val imageTokenRequest = imageTokenRequest(imageUrls)
         val imageTokenResponse = client.newCall(imageTokenRequest).execute()
         val imageTokenResult = imageTokenResponse.parseAs<List<BilibiliPageDto>>()
@@ -324,16 +322,6 @@ abstract class Bilibili(
             entryValues = IMAGE_QUALITY_PREF_ENTRY_VALUES
             setDefaultValue(IMAGE_QUALITY_PREF_DEFAULT_VALUE)
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-
-                preferences.edit()
-                    .putString("${IMAGE_QUALITY_PREF_KEY}_$lang", entry)
-                    .commit()
-            }
         }
 
         val imageFormatPref = ListPreference(screen.context).apply {
@@ -343,16 +331,6 @@ abstract class Bilibili(
             entryValues = IMAGE_FORMAT_PREF_ENTRY_VALUES
             setDefaultValue(IMAGE_FORMAT_PREF_DEFAULT_VALUE)
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-
-                preferences.edit()
-                    .putString("${IMAGE_FORMAT_PREF_KEY}_$lang", entry)
-                    .commit()
-            }
         }
 
         screen.addPreference(imageQualityPref)
@@ -363,58 +341,70 @@ abstract class Bilibili(
 
     protected open fun getAllAreas(): Array<BilibiliTag> = emptyArray()
 
-    protected open fun getAllSortOptions(): Array<String> =
-        arrayOf(intl.sortInterest, intl.sortPopular, intl.sortUpdated)
+    protected open fun getAllSortOptions(): Array<BilibiliTag> = arrayOf(
+        BilibiliTag(intl.sortInterest, 0),
+        BilibiliTag(intl.sortUpdated, 4),
+    )
 
     protected open fun getAllStatus(): Array<String> =
         arrayOf(intl.statusAll, intl.statusOngoing, intl.statusComplete)
 
-    protected open fun getAllPrices(): Array<String> =
-        arrayOf(intl.priceAll, intl.priceFree, intl.pricePaid)
+    protected open fun getAllPrices(): Array<String> = emptyArray()
 
     override fun getFilterList(): FilterList {
-        val filters = mutableListOf(
+        val allAreas = getAllAreas()
+        val allPrices = getAllPrices()
+
+        val filters = listOfNotNull(
             StatusFilter(intl.statusLabel, getAllStatus()),
             SortFilter(intl.sortLabel, getAllSortOptions(), defaultPopularSort),
-            PriceFilter(intl.priceLabel, getAllPrices()),
-            GenreFilter(intl.genreLabel, getAllGenres())
+            PriceFilter(intl.priceLabel, getAllPrices()).takeIf { allPrices.isNotEmpty() },
+            GenreFilter(intl.genreLabel, getAllGenres()),
+            AreaFilter(intl.areaLabel, allAreas).takeIf { allAreas.isNotEmpty() }
         )
-
-        val allAreas = getAllAreas()
-
-        if (allAreas.isNotEmpty()) {
-            filters += AreaFilter(intl.areaLabel, allAreas)
-        }
 
         return FilterList(filters)
     }
 
-    private fun expiredTokenIntercept(chain: Interceptor.Chain): Response {
+    private fun expiredImageTokenIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
         // Get a new image token if the current one expired.
         if (response.code == 403 && chain.request().url.toString().contains(CDN_URL)) {
+            response.close()
             val imagePath = chain.request().url.toString()
                 .substringAfter(CDN_URL)
                 .substringBefore("?token=")
             val imageTokenRequest = imageTokenRequest(listOf(imagePath))
             val imageTokenResponse = chain.proceed(imageTokenRequest)
             val imageTokenResult = imageTokenResponse.parseAs<List<BilibiliPageDto>>()
+            imageTokenResponse.close()
 
-            val newPage = imageTokenResult.data!![0]
+            val newPage = imageTokenResult.data!!.first()
             val newPageUrl = "${newPage.url}?token=${newPage.token}"
 
             val newRequest = imageRequest(Page(0, "", newPageUrl))
 
-            imageTokenResponse.close()
-            response.close()
             return chain.proceed(newRequest)
         }
 
         return response
     }
 
-    protected open fun HttpUrl.Builder.addCommonParameters(): HttpUrl.Builder = let {
+    private val SharedPreferences.chapterImageQuality
+        get() = when (getString("${IMAGE_QUALITY_PREF_KEY}_$lang", IMAGE_QUALITY_PREF_DEFAULT_VALUE)!!) {
+            "hd" -> "1600w"
+            "sd" -> "1000w"
+            "low" -> "800w_50q"
+            else -> "raw"
+        }
+
+    private val SharedPreferences.chapterImageFormat
+        get() = getString("${IMAGE_FORMAT_PREF_KEY}_$lang", IMAGE_FORMAT_PREF_DEFAULT_VALUE)!!
+
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = firstOrNull { it is R } as? R
+
+    protected open fun HttpUrl.Builder.addCommonParameters(): HttpUrl.Builder = apply {
         if (name == "BILIBILI COMICS") {
             addQueryParameter("lang", apiLang)
             addQueryParameter("sys_lang", apiLang)
@@ -422,8 +412,6 @@ abstract class Bilibili(
 
         addQueryParameter("device", "pc")
         addQueryParameter("platform", "web")
-
-        return@let it
     }
 
     protected inline fun <reified T> Response.parseAs(): BilibiliResultDto<T> = use {
@@ -449,21 +437,21 @@ abstract class Bilibili(
         private const val SEARCH_PER_PAGE = 9
 
         const val PREFIX_ID_SEARCH = "id:"
-        private val ID_SEARCH_PATTERN = "^id:(mc)?(\\d+)$".toRegex()
+        private val ID_SEARCH_PATTERN = "^${PREFIX_ID_SEARCH}mc(\\d+)$".toRegex()
 
-        private const val IMAGE_QUALITY_PREF_KEY = "chapterImageResolution"
-        private val IMAGE_QUALITY_PREF_ENTRY_VALUES = arrayOf("1200w", "800w", "600w_50q")
-        private val IMAGE_QUALITY_PREF_DEFAULT_VALUE = IMAGE_QUALITY_PREF_ENTRY_VALUES[0]
+        private const val IMAGE_QUALITY_PREF_KEY = "chapterImageQuality"
+        private val IMAGE_QUALITY_PREF_ENTRY_VALUES = arrayOf("raw", "hd", "sd", "low")
+        private val IMAGE_QUALITY_PREF_DEFAULT_VALUE = IMAGE_QUALITY_PREF_ENTRY_VALUES[1]
 
         private const val IMAGE_FORMAT_PREF_KEY = "chapterImageFormat"
         private val IMAGE_FORMAT_PREF_ENTRIES = arrayOf("JPG", "WEBP", "PNG")
         private val IMAGE_FORMAT_PREF_ENTRY_VALUES = arrayOf("jpg", "webp", "png")
         private val IMAGE_FORMAT_PREF_DEFAULT_VALUE = IMAGE_FORMAT_PREF_ENTRY_VALUES[0]
 
-        private const val THUMBNAIL_RESOLUTION = "@512w.jpg"
+        const val THUMBNAIL_RESOLUTION = "@512w.jpg"
 
         private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
         }
 
         private const val EMOJI_LOCKED = "\uD83D\uDD12"

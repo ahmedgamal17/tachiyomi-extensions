@@ -12,9 +12,15 @@ class ZMangaGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 1
 
     override val sources = listOf(
-        SingleLang("Maid - Manga", "https://www.maid.my.id", "id", overrideVersionCode = 10, className = "MaidManga"),
-        SingleLang("KomikPlay", "https://komikplay.com", "id", overrideVersionCode = 1),
+        SingleLang("Alceascan", "https://alceascan.my.id", "id"),
+        SingleLang("KomikGan", "https://komikgan.com", "id"),
+        SingleLang("Hensekai", "https://hensekai.com", "id", isNsfw = true, className = "Hensekai"),
+        SingleLang("KomikIndo.info", "http://komikindo.info", "id", isNsfw = true, className = "KomikIndoInfo"),
         SingleLang("Komikita", "https://komikita.org", "id"),
+        SingleLang("KomikPlay", "https://komikplay.com", "id", overrideVersionCode = 1),
+        SingleLang("Maid - Manga", "https://www.maid.my.id", "id", overrideVersionCode = 10, className = "MaidManga"),
+        SingleLang("Neumanga", "https://neumanga.net", "id"),
+        SingleLang("Sekte Komik", "https://sektekomik.com", "id", overrideVersionCode = 25),
     )
 
     companion object {

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.wpcomics
 
-import generator.ThemeSourceData.MultiLang
 import generator.ThemeSourceData.SingleLang
 import generator.ThemeSourceGenerator
 
@@ -13,9 +12,8 @@ class WPComicsGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 2
 
     override val sources = listOf(
-        MultiLang("MangaToro", "https://mangatoro.com", listOf("en", "ja"), overrideVersionCode = 1),
-        SingleLang("NetTruyen", "http://www.nettruyenme.com", "vi", overrideVersionCode = 9),
-        SingleLang("NhatTruyen", "https://nhattruyenone.com", "vi", overrideVersionCode = 7),
+        SingleLang("NetTruyen", "https://www.nettruyenking.com", "vi", overrideVersionCode = 14),
+        SingleLang("NhatTruyen", "https://nhattruyenmin.com", "vi", overrideVersionCode = 11),
         SingleLang("TruyenChon", "http://truyenchon.com", "vi", overrideVersionCode = 3),
         SingleLang("XOXO Comics", "https://xoxocomics.com", "en", className = "XoxoComics", overrideVersionCode = 1),
     )

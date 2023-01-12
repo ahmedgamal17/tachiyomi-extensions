@@ -22,7 +22,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override val name = "ComicExtra"
 
-    override val baseUrl = "https://www.comicextra.com"
+    override val baseUrl = "https://ww1.comicextra.com"
 
     override val lang = "en"
 
@@ -34,9 +34,9 @@ class ComicExtra : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "div.hl-box"
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/popular-comic", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/popular-comic/$page", headers)
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-updates", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-updates/$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {

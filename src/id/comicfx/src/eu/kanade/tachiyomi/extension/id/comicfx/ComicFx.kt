@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -32,18 +33,22 @@ class ComicFx : ParsedHttpSource() {
     override val lang = "id"
     override val supportsLatest = true
 
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36")
+
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/filterList?page=$page&sortBy=name&asc=true", headers)
     }
 
-    override fun popularMangaSelector() = "div.media"
+    // combining selector for "popular" and "latest" to be used for "search" selector as it need both selector
+    override fun popularMangaSelector() = "div.media, div.daftar-komik .komika"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select(".media-left a img").attr("src")
-        manga.title = element.select(".media-body .media-heading a strong").text()
-        val item = element.select(".media-left a")
+        manga.thumbnail_url = element.select(".media-left a img, .komik-img a .batas img").attr("abs:data-src")
+        manga.title = element.select(".media-body .media-heading a strong, .komik-des a h3").text()
+        val item = element.select(".media-left a, div.komik-img a")
         manga.setUrlWithoutDomain(item.attr("href"))
 
         return manga
@@ -56,17 +61,9 @@ class ComicFx : ParsedHttpSource() {
         return GET("$baseUrl/latest-release?page=$page", headers)
     }
 
-    override fun latestUpdatesSelector() = "div.daftar-komik .komika"
+    override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select(".komik-img a .batas img").attr("src")
-        manga.title = element.select(".komik-des a h3").text()
-        val item = element.select("div.komik-img a")
-        manga.setUrlWithoutDomain(item.attr("href"))
-
-        return manga
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -113,6 +110,14 @@ class ComicFx : ParsedHttpSource() {
                 is TypeFilter -> url.addQueryParameter("ctype", filter.toUriPart())
                 is AuthorFilter -> url.addQueryParameter("author", filter.state)
                 is ArtistFilter -> url.addQueryParameter("artist", filter.state)
+
+                // if site has project page, default value "hasProjectPage" = false
+                is ProjectFilter -> {
+                    if (filter.toUriPart() == "project-filter-on") {
+                        url.setPathSegment(0, "/latest-project".substring(1))
+                    }
+                }
+                else -> { /* Do Nothing */ }
             }
         }
 
@@ -129,11 +134,23 @@ class ComicFx : ParsedHttpSource() {
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        author = document.select("#author a").text()
-        artist = document.select(".infolengkap span:contains(Artist) a").text()
+        author = document.select("#author").text()
+        artist = document.select(".infolengkap span:contains(Artist) a, #artist").text()
         status = parseStatus(document.select(".infolengkap span:contains(status) i").text())
         description = document.select("div.sinopsis p").text()
-        genre = document.select(".infolengkap span:contains(Genre) a").joinToString { it.text() }
+
+        // Add series type (manga/manhwa/manhua/other) to genre
+        val genres = document.select(".genre-komik a").map { it.text() }.toMutableList()
+        document.selectFirst(".infokomik .type")?.ownText().takeIf { it.isNullOrBlank().not() }?.let { genres.add(it) }
+        genre = genres.map { genre ->
+            genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
+                if (char.isLowerCase()) char.titlecase(Locale.forLanguageTag(lang))
+                else char.toString()
+            }
+        }
+            .joinToString { it.trim() }
+
+        thumbnail_url = document.select(".thumb img").attr("abs:src")
     }
 
     protected fun parseStatus(element: String?): Int = when {
@@ -188,7 +205,7 @@ class ComicFx : ParsedHttpSource() {
         val pages = mutableListOf<Page>()
 
         document.select("#all img").mapIndexed { i, element ->
-            val image = element.attr("data-src")
+            val image = element.attr("abs:src")
             if (image != "") {
                 pages.add(Page(i, "", image))
             }
@@ -204,7 +221,11 @@ class ComicFx : ParsedHttpSource() {
         StatusFilter(),
         TypeFilter(),
         ArtistFilter("Artist"),
-        AuthorFilter("Author")
+        AuthorFilter("Author"),
+        Filter.Separator(),
+        Filter.Header("NOTE: Can't be used with other filter!"),
+        Filter.Header("$name Project List page"),
+        ProjectFilter(),
     )
 
     private class ArtistFilter(name: String) : Filter.Text(name)
@@ -276,6 +297,14 @@ class ComicFx : ParsedHttpSource() {
             Pair("2", "Manhwa (Korean)"),
             Pair("3", "Manga"),
             Pair("4", "Oneshot"),
+        )
+    )
+
+    private class ProjectFilter : UriPartFilter(
+        "Filter Project",
+        arrayOf(
+            Pair("", "Show all manga"),
+            Pair("project-filter-on", "Show only project manga")
         )
     )
 

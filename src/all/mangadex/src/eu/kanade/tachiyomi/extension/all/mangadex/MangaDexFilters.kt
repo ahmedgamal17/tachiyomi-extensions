@@ -1,27 +1,32 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
 import android.content.SharedPreferences
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.ContentRatingDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.PublicationDemographicDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatusDto
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
 class MangaDexFilters {
 
-    internal fun getMDFilterList(preferences: SharedPreferences, dexLang: String, intl: MangaDexIntl): FilterList {
-        return FilterList(
-            HasAvailableChaptersFilter(intl),
-            OriginalLanguageList(intl, getOriginalLanguage(preferences, dexLang, intl)),
-            ContentRatingList(intl, getContentRating(preferences, dexLang, intl)),
-            DemographicList(intl, getDemographics(intl)),
-            StatusList(intl, getStatus(intl)),
-            SortFilter(intl, getSortables(intl)),
-            TagsFilter(intl, getTagFilters(intl)),
-            TagList(intl.content, getContents(intl)),
-            TagList(intl.format, getFormats(intl)),
-            TagList(intl.genre, getGenres(intl)),
-            TagList(intl.theme, getThemes(intl)),
-        )
-    }
+    internal fun getMDFilterList(
+        preferences: SharedPreferences,
+        dexLang: String,
+        intl: MangaDexIntl
+    ): FilterList = FilterList(
+        HasAvailableChaptersFilter(intl),
+        OriginalLanguageList(intl, getOriginalLanguage(preferences, dexLang, intl)),
+        ContentRatingList(intl, getContentRating(preferences, dexLang, intl)),
+        DemographicList(intl, getDemographics(intl)),
+        StatusList(intl, getStatus(intl)),
+        SortFilter(intl, getSortables(intl)),
+        TagsFilter(intl, getTagFilters(intl)),
+        TagList(intl.content, getContents(intl)),
+        TagList(intl.format, getFormats(intl)),
+        TagList(intl.genre, getGenres(intl)),
+        TagList(intl.theme, getThemes(intl)),
+    )
 
     private interface UrlQueryFilter {
         fun addQueryParameter(url: HttpUrl.Builder, dexLang: String)
@@ -61,7 +66,11 @@ class MangaDexFilters {
         }
     }
 
-    private fun getOriginalLanguage(preferences: SharedPreferences, dexLang: String, intl: MangaDexIntl): List<OriginalLanguage> {
+    private fun getOriginalLanguage(
+        preferences: SharedPreferences,
+        dexLang: String,
+        intl: MangaDexIntl
+    ): List<OriginalLanguage> {
         val originalLanguages = preferences.getStringSet(
             MDConstants.getOriginalLanguagePrefKey(dexLang),
             setOf()
@@ -91,27 +100,28 @@ class MangaDexFilters {
         }
     }
 
-    private fun getContentRating(preferences: SharedPreferences, dexLang: String, intl: MangaDexIntl): List<ContentRating> {
+    private fun getContentRating(
+        preferences: SharedPreferences,
+        dexLang: String,
+        intl: MangaDexIntl
+    ): List<ContentRating> {
         val contentRatings = preferences.getStringSet(
             MDConstants.getContentRatingPrefKey(dexLang),
             MDConstants.contentRatingPrefDefaults
         )
+
         return listOf(
-            ContentRating(intl.contentRatingSafe, MDConstants.contentRatingPrefValSafe).apply {
-                state = contentRatings
-                    ?.contains(MDConstants.contentRatingPrefValSafe) ?: true
+            ContentRating(intl.contentRatingSafe, ContentRatingDto.SAFE.value).apply {
+                state = contentRatings?.contains(MDConstants.contentRatingPrefValSafe) ?: true
             },
-            ContentRating(intl.contentRatingSuggestive, MDConstants.contentRatingPrefValSuggestive).apply {
-                state = contentRatings
-                    ?.contains(MDConstants.contentRatingPrefValSuggestive) ?: true
+            ContentRating(intl.contentRatingSuggestive, ContentRatingDto.SUGGESTIVE.value).apply {
+                state = contentRatings?.contains(MDConstants.contentRatingPrefValSuggestive) ?: true
             },
-            ContentRating(intl.contentRatingErotica, MDConstants.contentRatingPrefValErotica).apply {
-                state = contentRatings
-                    ?.contains(MDConstants.contentRatingPrefValErotica) ?: false
+            ContentRating(intl.contentRatingErotica, ContentRatingDto.EROTICA.value).apply {
+                state = contentRatings?.contains(MDConstants.contentRatingPrefValErotica) ?: false
             },
-            ContentRating(intl.contentRatingPornographic, MDConstants.contentRatingPrefValPornographic).apply {
-                state = contentRatings
-                    ?.contains(MDConstants.contentRatingPrefValPornographic) ?: false
+            ContentRating(intl.contentRatingPornographic, ContentRatingDto.PORNOGRAPHIC.value).apply {
+                state = contentRatings?.contains(MDConstants.contentRatingPrefValPornographic) ?: false
             },
         )
     }
@@ -131,11 +141,11 @@ class MangaDexFilters {
     }
 
     private fun getDemographics(intl: MangaDexIntl) = listOf(
-        Demographic(intl.publicationDemographicNone, "none"),
-        Demographic(intl.publicationDemographicShounen, "shounen"),
-        Demographic(intl.publicationDemographicShoujo, "shoujo"),
-        Demographic(intl.publicationDemographicSeinen, "seinen"),
-        Demographic(intl.publicationDemographicJosei, "josei")
+        Demographic(intl.publicationDemographicNone, PublicationDemographicDto.NONE.value),
+        Demographic(intl.publicationDemographicShounen, PublicationDemographicDto.SHOUNEN.value),
+        Demographic(intl.publicationDemographicShoujo, PublicationDemographicDto.SHOUJO.value),
+        Demographic(intl.publicationDemographicSeinen, PublicationDemographicDto.SEINEN.value),
+        Demographic(intl.publicationDemographicJosei, PublicationDemographicDto.JOSEI.value)
     )
 
     private class Status(name: String, val value: String) : Filter.CheckBox(name)
@@ -153,10 +163,10 @@ class MangaDexFilters {
     }
 
     private fun getStatus(intl: MangaDexIntl) = listOf(
-        Status(intl.statusOngoing, "ongoing"),
-        Status(intl.statusCompleted, "completed"),
-        Status(intl.statusHiatus, "hiatus"),
-        Status(intl.statusCancelled, "cancelled"),
+        Status(intl.statusOngoing, StatusDto.ONGOING.value),
+        Status(intl.statusCompleted, StatusDto.COMPLETED.value),
+        Status(intl.statusHiatus, StatusDto.HIATUS.value),
+        Status(intl.statusCancelled, StatusDto.CANCELLED.value),
     )
 
     data class Sortable(val title: String, val value: String) {
@@ -212,7 +222,7 @@ class MangaDexFilters {
         }
     }
 
-    internal fun getContents(intl: MangaDexIntl): List<Tag> {
+    private fun getContents(intl: MangaDexIntl): List<Tag> {
         val tags = listOf(
             Tag("b29d6a3d-1569-4e7a-8caf-7557bc92cd5d", intl.contentGore),
             Tag("97893a4c-12af-4dac-b6be-0dffb353568e", intl.contentSexualViolence),
@@ -221,7 +231,7 @@ class MangaDexFilters {
         return tags.sortIfTranslated(intl)
     }
 
-    internal fun getFormats(intl: MangaDexIntl): List<Tag> {
+    private fun getFormats(intl: MangaDexIntl): List<Tag> {
         val tags = listOf(
             Tag("b11fda93-8f1d-4bef-b2ed-8803d3733170", intl.formatFourKoma),
             Tag("f4122d1c-3b44-44d0-9936-ff7502c39ad3", intl.formatAdaptation),
@@ -240,7 +250,7 @@ class MangaDexFilters {
         return tags.sortIfTranslated(intl)
     }
 
-    internal fun getGenres(intl: MangaDexIntl): List<Tag> {
+    private fun getGenres(intl: MangaDexIntl): List<Tag> {
         val tags = listOf(
             Tag("391b0423-d847-456f-aff0-8b0cfc03066b", intl.genreAction),
             Tag("87cc87cd-a395-47af-b27a-93258283bbc6", intl.genreAdventure),
@@ -271,7 +281,7 @@ class MangaDexFilters {
         return tags.sortIfTranslated(intl)
     }
 
-    internal fun getThemes(intl: MangaDexIntl): List<Tag> {
+    private fun getThemes(intl: MangaDexIntl): List<Tag> {
         val tags = listOf(
             Tag("e64f6742-c834-471d-8d72-dd51fc02b835", intl.themeAliens),
             Tag("3de8c75d-8ee3-48ff-98ee-e20a65c86451", intl.themeAnimals),
