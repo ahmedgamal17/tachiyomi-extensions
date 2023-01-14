@@ -12,7 +12,7 @@ import java.util.Locale
 
 class MangaSwat : MangaThemesia(
     "MangaSwat",
-    "https://swatmanga.me",
+    "https://swatmanga.net",
     "ar",
     mangaUrlDirectory = "/manga",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -39,6 +39,7 @@ class MangaSwat : MangaThemesia(
     override val seriesGenreSelector = "span:contains(التصنيف) a, .mgen a"
     override val seriesTypeSelector = "span:contains(النوع) a"
     override val seriesStatusSelector = "span:contains(الحالة)"
+    override val seriesDescriptionSelector = "span.desc"
 
     override val pageSelector = "div#readerarea img"
 
