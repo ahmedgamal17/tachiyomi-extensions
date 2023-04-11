@@ -12,7 +12,7 @@ import java.util.Locale
 
 class MangaSwat : MangaThemesia(
     "MangaSwat",
-    "https://swatmanga.net",
+    "https://swatmanga.me",
     "ar",
     mangaUrlDirectory = "/manga",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
