@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.ru.yaoilib
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -7,8 +11,17 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
-class YaoiLib : LibGroup("YaoiLib", "https://yaoilib.me", "ru") {
+class YaoiLib : LibGroup("YaoiLib", "https://v1.slashlib.me", "ru") {
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
+    override val baseUrl: String = domain
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor(::imageContentTypeIntercept)
@@ -27,7 +40,7 @@ class YaoiLib : LibGroup("YaoiLib", "https://yaoilib.me", "ru") {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (csrfToken.isEmpty()) {
             val tokenResponse = client.newCall(popularMangaRequest(page)).execute()
-            val resBody = tokenResponse.body!!.string()
+            val resBody = tokenResponse.body.string()
             csrfToken = "_token\" content=\"(.*)\"".toRegex().find(resBody)!!.groups[1]!!.value
         }
         val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
@@ -37,7 +50,7 @@ class YaoiLib : LibGroup("YaoiLib", "https://yaoilib.me", "ru") {
                     if (age.state != Filter.TriState.STATE_IGNORE) {
                         url.addQueryParameter(
                             if (age.isIncluded()) "caution[include][]" else "caution[exclude][]",
-                            age.id
+                            age.id,
                         )
                     }
                 }
@@ -45,10 +58,11 @@ class YaoiLib : LibGroup("YaoiLib", "https://yaoilib.me", "ru") {
                     if (tag.state != Filter.TriState.STATE_IGNORE) {
                         url.addQueryParameter(
                             if (tag.isIncluded()) "tags[include][]" else "tags[exclude][]",
-                            tag.id
+                            tag.id,
                         )
                     }
                 }
+                else -> {}
             }
         }
         return POST(url.toString(), catalogHeaders())
@@ -164,17 +178,41 @@ class YaoiLib : LibGroup("YaoiLib", "https://yaoilib.me", "ru") {
         SearchFilter("Шантаж", "279"),
         SearchFilter("Эльфы", "216"),
         SearchFilter("Якудза", "164"),
-        SearchFilter("Япония", "280")
+        SearchFilter("Япония", "280"),
 
     )
 
     private fun getAgeList() = listOf(
         SearchFilter("Отсутствует", "0"),
         SearchFilter("16+", "1"),
-        SearchFilter("18+", "2")
+        SearchFilter("18+", "2"),
     )
+
+    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+        EditTextPreference(screen.context).apply {
+            key = DOMAIN_TITLE
+            this.title = DOMAIN_TITLE
+            summary = domain
+            this.setDefaultValue(DOMAIN_DEFAULT)
+            dialogTitle = DOMAIN_TITLE
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val res = preferences.edit().putString(DOMAIN_TITLE, newValue as String).commit()
+                    Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+                    res
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+        }.let(screen::addPreference)
+    }
 
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
+
+        private const val DOMAIN_TITLE = "Домен"
+        private const val DOMAIN_DEFAULT = "https://v1.slashlib.me"
     }
 }

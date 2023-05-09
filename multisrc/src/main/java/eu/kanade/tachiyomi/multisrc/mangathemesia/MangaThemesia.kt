@@ -1,7 +1,15 @@
 package eu.kanade.tachiyomi.multisrc.mangathemesia
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.util.Log
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -17,6 +26,7 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -24,7 +34,10 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -36,14 +49,89 @@ abstract class MangaThemesia(
     override val baseUrl: String,
     override val lang: String,
     val mangaUrlDirectory: String = "/manga",
-    val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
-) : ParsedHttpSource() {
+    val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
+) : ParsedHttpSource(), ConfigurableSource {
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     protected open val json: Json by injectLazy()
 
     override val supportsLatest = true
 
+    // override with true if you want useRandomUserAgentByDefault to be on by default for some source
+    protected open val useRandomUserAgentByDefault: Boolean = false
+
+    protected open val filterIncludeUserAgent: List<String> = listOf()
+    protected open val filterExcludeUserAgent: List<String> = listOf()
+
+    private var userAgent: String? = null
+    private var checkedUa = false
+
+    protected val hasUaIntercept by lazy {
+        client.interceptors.toString().contains("uaIntercept")
+    }
+
+    protected val uaIntercept = object : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val useRandomUa = preferences.getBoolean(PREF_KEY_RANDOM_UA, false)
+            val customUa = preferences.getString(PREF_KEY_CUSTOM_UA, "")
+
+            try {
+                if (hasUaIntercept && (useRandomUa || customUa!!.isNotBlank())) {
+                    Log.i("Extension_setting", "$TITLE_RANDOM_UA or $TITLE_CUSTOM_UA option is ENABLED")
+
+                    if (customUa!!.isNotBlank() && useRandomUa.not()) {
+                        userAgent = customUa
+                    }
+
+                    if (userAgent.isNullOrBlank() && !checkedUa) {
+                        val uaResponse = chain.proceed(GET(UA_DB_URL))
+
+                        if (uaResponse.isSuccessful) {
+                            var listUserAgentString =
+                                json.decodeFromString<Map<String, List<String>>>(uaResponse.body.string())["desktop"]
+
+                            if (filterIncludeUserAgent.isNotEmpty()) {
+                                listUserAgentString = listUserAgentString!!.filter {
+                                    filterIncludeUserAgent.any { filter ->
+                                        it.contains(filter, ignoreCase = true)
+                                    }
+                                }
+                            }
+                            if (filterExcludeUserAgent.isNotEmpty()) {
+                                listUserAgentString = listUserAgentString!!.filterNot {
+                                    filterExcludeUserAgent.any { filter ->
+                                        it.contains(filter, ignoreCase = true)
+                                    }
+                                }
+                            }
+                            userAgent = listUserAgentString!!.random()
+                            checkedUa = true
+                        }
+
+                        uaResponse.close()
+                    }
+
+                    if (userAgent.isNullOrBlank().not()) {
+                        val newRequest = chain.request().newBuilder()
+                            .header("User-Agent", userAgent!!.trim())
+                            .build()
+
+                        return chain.proceed(newRequest)
+                    }
+                }
+
+                return chain.proceed(chain.request())
+            } catch (e: Exception) {
+                throw IOException(e.message)
+            }
+        }
+    }
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(uaIntercept)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -71,11 +159,11 @@ abstract class MangaThemesia(
 
         return fetchMangaDetails(
             SManga.create()
-                .apply { this.url = "$mangaUrlDirectory/$mangaPath" }
+                .apply { this.url = "$mangaUrlDirectory/$mangaPath/" },
         )
             .map {
                 // Isn't set in returned manga
-                it.url = "$mangaUrlDirectory/$id"
+                it.url = "$mangaUrlDirectory/$mangaPath/"
                 MangasPage(listOf(it), false)
             }
     }
@@ -120,6 +208,7 @@ abstract class MangaThemesia(
                 else -> { /* Do Nothing */ }
             }
         }
+        url.addPathSegment("")
         return GET(url.toString())
     }
 
@@ -160,7 +249,7 @@ abstract class MangaThemesia(
             title = seriesDetails.selectFirst(seriesTitleSelector)?.text().orEmpty()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-            description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }
+            description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
             // Add alternative name to manga description
             val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText().takeIf { it.isNullOrBlank().not() }
             altName?.let {
@@ -171,8 +260,11 @@ abstract class MangaThemesia(
             seriesDetails.selectFirst(seriesTypeSelector)?.ownText().takeIf { it.isNullOrBlank().not() }?.let { genres.add(it) }
             genre = genres.map { genre ->
                 genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                    if (char.isLowerCase()) char.titlecase(Locale.forLanguageTag(lang))
-                    else char.toString()
+                    if (char.isLowerCase()) {
+                        char.titlecase(Locale.forLanguageTag(lang))
+                    } else {
+                        char.toString()
+                    }
                 }
             }
                 .joinToString { it.trim() }
@@ -222,7 +314,7 @@ abstract class MangaThemesia(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first().text() }
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
         date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
     }
 
@@ -312,11 +404,11 @@ abstract class MangaThemesia(
     open class SelectFilter(
         displayName: String,
         val vals: Array<Pair<String, String>>,
-        defaultValue: String? = null
+        defaultValue: String? = null,
     ) : Filter.Select<String>(
         displayName,
         vals.map { it.first }.toTypedArray(),
-        vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0
+        vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
     ) {
         fun selectedValue() = vals[state].second
     }
@@ -328,8 +420,8 @@ abstract class MangaThemesia(
             Pair("Ongoing", "ongoing"),
             Pair("Completed", "completed"),
             Pair("Hiatus", "hiatus"),
-            Pair("Dropped", "dropped")
-        )
+            Pair("Dropped", "dropped"),
+        ),
     )
 
     protected class TypeFilter : SelectFilter(
@@ -339,8 +431,8 @@ abstract class MangaThemesia(
             Pair("Manga", "Manga"),
             Pair("Manhwa", "Manhwa"),
             Pair("Manhua", "Manhua"),
-            Pair("Comic", "Comic")
-        )
+            Pair("Comic", "Comic"),
+        ),
     )
 
     protected class OrderByFilter(defaultOrder: String? = null) : SelectFilter(
@@ -351,23 +443,23 @@ abstract class MangaThemesia(
             Pair("Z-A", "titlereverse"),
             Pair("Latest Update", "update"),
             Pair("Latest Added", "latest"),
-            Pair("Popular", "popular")
+            Pair("Popular", "popular"),
         ),
-        defaultOrder
+        defaultOrder,
     )
 
     protected class ProjectFilter : SelectFilter(
         "Filter Project",
         arrayOf(
             Pair("Show all manga", ""),
-            Pair("Show only project manga", "project-filter-on")
-        )
+            Pair("Show only project manga", "project-filter-on"),
+        ),
     )
 
     protected class Genre(
         name: String,
         val value: String,
-        state: Int = STATE_IGNORE
+        state: Int = STATE_IGNORE,
     ) : Filter.TriState(name, state)
 
     protected class GenreListFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
@@ -400,7 +492,7 @@ abstract class MangaThemesia(
                     Filter.Header("NOTE: Can't be used with other filter!"),
                     Filter.Header("$name Project List page"),
                     ProjectFilter(),
-                )
+                ),
             )
         }
         return FilterList(filters)
@@ -448,8 +540,8 @@ abstract class MangaThemesia(
     private fun parseGenres(document: Document): List<Genre>? {
         return document.selectFirst("ul.genrez")?.select("li")?.map { li ->
             Genre(
-                li.selectFirst("label").text(),
-                li.selectFirst("input[type=checkbox]").attr("value")
+                li.selectFirst("label")!!.text(),
+                li.selectFirst("input[type=checkbox]")!!.attr("value"),
             )
         }
     }
@@ -460,7 +552,7 @@ abstract class MangaThemesia(
         else -> attr("abs:src")
     }
 
-    protected open fun Elements.imgAttr(): String = this.first().imgAttr()
+    protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     // Unused
     override fun popularMangaSelector(): String = throw UnsupportedOperationException("Not used")
@@ -473,6 +565,61 @@ abstract class MangaThemesia(
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomAndCustomUserAgentPreferences(screen)
+    }
+
+    protected fun addRandomAndCustomUserAgentPreferences(screen: PreferenceScreen) {
+        if (!hasUaIntercept) {
+            return // Unable to change the user agent. Therefore the preferences won't be displayed.
+        }
+
+        val prefRandomUserAgent = SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_KEY_RANDOM_UA
+            title = TITLE_RANDOM_UA
+            summary = if (preferences.getBoolean(PREF_KEY_RANDOM_UA, useRandomUserAgentByDefault)) userAgent else ""
+            setDefaultValue(useRandomUserAgentByDefault)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val useRandomUa = newValue as Boolean
+                preferences.edit().putBoolean(PREF_KEY_RANDOM_UA, useRandomUa).apply()
+                if (!useRandomUa) {
+                    Toast.makeText(screen.context, RESTART_APP_STRING, Toast.LENGTH_LONG).show()
+                } else {
+                    userAgent = null
+                    if (preferences.getString(PREF_KEY_CUSTOM_UA, "").isNullOrBlank().not()) {
+                        Toast.makeText(screen.context, SUMMARY_CLEANING_CUSTOM_UA, Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                preferences.edit().putString(PREF_KEY_CUSTOM_UA, "").apply()
+                true
+            }
+        }
+
+        val prefCustomUserAgent = EditTextPreference(screen.context).apply {
+            key = PREF_KEY_CUSTOM_UA
+            title = TITLE_CUSTOM_UA
+            summary = preferences.getString(PREF_KEY_CUSTOM_UA, "")!!.trim()
+            setOnPreferenceChangeListener { _, newValue ->
+                val customUa = newValue as String
+                preferences.edit().putString(PREF_KEY_CUSTOM_UA, customUa).apply()
+                if (customUa.isBlank()) {
+                    Toast.makeText(screen.context, RESTART_APP_STRING, Toast.LENGTH_LONG).show()
+                } else {
+                    userAgent = null
+                }
+                summary = customUa.trim()
+                prefRandomUserAgent.summary = ""
+                prefRandomUserAgent.isChecked = false
+                true
+            }
+        }
+
+        screen.addPreference(prefRandomUserAgent)
+        screen.addPreference(prefCustomUserAgent)
+    }
+
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
 
@@ -482,5 +629,16 @@ abstract class MangaThemesia(
         private val CHAPTER_PAGE_ID_REGEX = "chapter_id\\s*=\\s*(\\d+);".toRegex()
 
         val JSON_IMAGE_LIST_REGEX = "\"images\"\\s*:\\s*(\\[.*?])".toRegex()
+
+        const val TITLE_RANDOM_UA = "Use Random Latest User-Agent"
+        const val PREF_KEY_RANDOM_UA = "pref_key_random_ua"
+
+        const val TITLE_CUSTOM_UA = "Custom User-Agent"
+        const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua"
+
+        const val SUMMARY_CLEANING_CUSTOM_UA = "$TITLE_CUSTOM_UA cleared."
+
+        const val RESTART_APP_STRING = "Restart Tachiyomi to apply new setting."
+        private const val UA_DB_URL = "https://tachiyomiorg.github.io/user-agents/user-agents.json"
     }
 }

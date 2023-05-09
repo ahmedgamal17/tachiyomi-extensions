@@ -10,11 +10,10 @@ class EGYManga : Madara(
     "EGY Manga",
     "https://egymanga.net",
     "ar",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
+    SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
 
     // The website does not flag the content.
-    override val useLoadMoreSearch = false
     override val filterNonMangaItems = false
 
     override val pageListParseSelector = "div.separator"

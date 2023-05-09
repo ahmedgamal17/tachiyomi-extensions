@@ -71,7 +71,7 @@ open class A3Manga(
                 fetchMangaDetails(
                     SManga.create().apply {
                         url = "/truyen-tranh/$id/"
-                    }
+                    },
                 )
                     .map {
                         it.url = "/truyen-tranh/$id/"
@@ -142,9 +142,9 @@ open class A3Manga(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.select("a").attr("href"))
         name = element.select("a .hidden-sm").text()
-        date_upload = kotlin.runCatching {
-            dateFormat.parse(element.select("td").last().text())?.time
-        }.getOrNull() ?: 0L
+        date_upload = runCatching {
+            dateFormat.parse(element.select("td").last()!!.text())?.time
+        }.getOrNull() ?: 0
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -183,7 +183,7 @@ open class A3Manga(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
 
     private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body?.string().orEmpty())
+        return json.decodeFromString(body.string())
     }
 
     // https://stackoverflow.com/a/66614516

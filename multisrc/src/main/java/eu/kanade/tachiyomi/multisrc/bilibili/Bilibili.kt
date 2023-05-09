@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,7 +28,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
-import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -39,7 +37,7 @@ import java.util.Locale
 abstract class Bilibili(
     override val name: String,
     final override val baseUrl: String,
-    final override val lang: String
+    final override val lang: String,
 ) : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
@@ -79,8 +77,8 @@ abstract class Bilibili(
         page = page,
         query = "",
         filters = FilterList(
-            SortFilter("", getAllSortOptions(), defaultPopularSort)
-        )
+            SortFilter("", getAllSortOptions(), defaultPopularSort),
+        ),
     )
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
@@ -89,8 +87,8 @@ abstract class Bilibili(
         page = page,
         query = "",
         filters = FilterList(
-            SortFilter("", getAllSortOptions(), defaultLatestSort)
-        )
+            SortFilter("", getAllSortOptions(), defaultLatestSort),
+        ),
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
@@ -98,7 +96,8 @@ abstract class Bilibili(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         ID_SEARCH_PATTERN.matchEntire(query)?.let {
             val (id) = it.destructured
-            return mangaDetailsApiRequest("/detail/mc$id")
+            val temporaryManga = SManga.create().apply { url = "/detail/mc$id" }
+            return mangaDetailsRequest(temporaryManga)
         }
 
         val price = filters.firstInstanceOrNull<PriceFilter>()?.state ?: 0
@@ -120,10 +119,13 @@ abstract class Bilibili(
         }
         val requestBody = jsonPayload.toString().toRequestBody(JSON_MEDIA_TYPE)
 
-        val refererUrl = if (query.isBlank()) "$baseUrl/genre" else
+        val refererUrl = if (query.isBlank()) {
+            "$baseUrl/genre"
+        } else {
             "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .toString()
+        }
 
         val newHeaders = headersBuilder()
             .set("Referer", refererUrl)
@@ -177,23 +179,16 @@ abstract class Bilibili(
         url = "/detail/mc$comicId"
     }
 
-    // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsApiRequest(manga.url))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    private fun mangaDetailsApiRequest(mangaUrl: String): Request {
-        val comicId = mangaUrl.substringAfterLast("/mc").toInt()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val comicId = manga.url.substringAfterLast("/mc").toInt()
 
         val jsonPayload = buildJsonObject { put("comic_id", comicId) }
         val requestBody = jsonPayload.toString().toRequestBody(JSON_MEDIA_TYPE)
 
         val newHeaders = headersBuilder()
-            .set("Referer", baseUrl + mangaUrl)
+            .set("Referer", baseUrl + manga.url)
             .build()
 
         val apiUrl = "$baseUrl/$API_COMIC_V1_COMIC_ENDPOINT/ComicDetail".toHttpUrl()
@@ -233,7 +228,7 @@ abstract class Bilibili(
     }
 
     // Chapters are available in the same url of the manga details.
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsApiRequest(manga.url)
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<BilibiliComicDto>()
@@ -252,6 +247,8 @@ abstract class Bilibili(
         date_upload = episode.publicationTime.toDate()
         url = "/mc$comicId/${episode.id}"
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request = imageIndexRequest(chapter.url, "")
 
@@ -360,7 +357,7 @@ abstract class Bilibili(
             SortFilter(intl.sortLabel, getAllSortOptions(), defaultPopularSort),
             PriceFilter(intl.priceLabel, getAllPrices()).takeIf { allPrices.isNotEmpty() },
             GenreFilter(intl.genreLabel, getAllGenres()),
-            AreaFilter(intl.areaLabel, allAreas).takeIf { allAreas.isNotEmpty() }
+            AreaFilter(intl.areaLabel, allAreas).takeIf { allAreas.isNotEmpty() },
         )
 
         return FilterList(filters)
@@ -415,7 +412,7 @@ abstract class Bilibili(
     }
 
     protected inline fun <reified T> Response.parseAs(): BilibiliResultDto<T> = use {
-        json.decodeFromString(it.body?.string().orEmpty())
+        json.decodeFromString(it.body.string())
     }
 
     private fun String.toDate(): Long {

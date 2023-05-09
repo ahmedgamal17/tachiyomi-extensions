@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.zh.wnacg
 
+import android.app.Application
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,13 +17,17 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 // URL can be found at https://www.wnacglink.top/
-class wnacg : ParsedHttpSource() {
+class wnacg : ParsedHttpSource(), ConfigurableSource {
     override val name = "紳士漫畫"
-    override val baseUrl = "https://www.htmanga.top"
     override val lang = "zh"
     override val supportsLatest = false
+
+    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
+    override val baseUrl = preferences.baseUrl
 
     override fun popularMangaSelector() = ".gallary_item"
     override fun latestUpdatesSelector() = throw Exception("Not used")
@@ -63,11 +70,11 @@ class wnacg : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
     private fun mangaFromElement(element: Element): SManga {
-        val link = element.selectFirst(".title > a")
+        val link = element.selectFirst(".title > a")!!
         val manga = SManga.create()
         manga.url = link.attr("href")
         manga.title = link.text()
-        manga.thumbnail_url = element.selectFirst("img").absUrl("src")
+        manga.thumbnail_url = element.selectFirst("img")!!.absUrl("src")
             .replaceBefore(':', "http")
         // maybe the local cache cause the old source (url) can not be update. but the image can be update on detailpage.
         // ps. new machine can be load img normal.
@@ -89,7 +96,7 @@ class wnacg : ParsedHttpSource() {
         manga.artist = document.selectFirst("div.uwuinfo p")?.text() ?: "Unknown"
         manga.author = document.selectFirst("div.uwuinfo p")?.text() ?: "Unknown"
         manga.thumbnail_url =
-            "http:" + document.selectFirst("div.uwthumb img").attr("src")
+            "http:" + document.selectFirst("div.uwthumb img")!!.attr("src")
         manga.description =
             document.selectFirst("div.asTBcell p")?.html()?.replace("<br>", "\n")
 
@@ -107,7 +114,7 @@ class wnacg : ParsedHttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val regex = """//\S*(jpg|png)""".toRegex()
         val galleryaid =
-            response.body!!.string()
+            response.body.string()
         return regex.findAll(galleryaid).mapIndexedTo(ArrayList()) { index, match ->
             Page(index, imageUrl = "http:" + match.value)
         }
@@ -120,7 +127,7 @@ class wnacg : ParsedHttpSource() {
 
     override fun getFilterList() = FilterList(
         Filter.Header("注意：分类不支持搜索"),
-        CategoryFilter()
+        CategoryFilter(),
     )
 
     private class CategoryFilter : UriPartFilter(
@@ -137,7 +144,7 @@ class wnacg : ParsedHttpSource() {
             Pair("杂志&短篇-日语", "albums-index-page-%d-cate-14.html"),
             Pair("韩漫-汉化", "albums-index-page-%d-cate-20.html"),
             Pair("韩漫-生肉", "albums-index-page-%d-cate-21.html"),
-        )
+        ),
     )
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
@@ -146,4 +153,8 @@ class wnacg : ParsedHttpSource() {
     }
 
     // <<< Filters <<<
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        getPreferencesInternal(screen.context, preferences).forEach(screen::addPreference)
+    }
 }

@@ -9,20 +9,20 @@ class OtakuSanctuaryGenerator : ThemeSourceGenerator {
 
     override val themeClass = "OtakuSanctuary"
 
-    override val baseVersionCode: Int = 1
+    override val baseVersionCode: Int = 2
 
     override val sources = listOf(
         MultiLang(
             "Otaku Sanctuary",
             "https://otakusan.net",
             listOf("all", "vi", "en", "it", "fr", "es"),
-            isNsfw = true
+            isNsfw = true,
         ),
         MultiLang(
             "MyRockManga",
             "https://myrockmanga.com",
             listOf("all", "vi", "en", "it", "fr", "es"),
-            isNsfw = true
+            isNsfw = true,
         ),
     )
 

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.heancms
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,7 +19,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -28,14 +26,22 @@ abstract class HeanCms(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    protected val apiUrl: String = baseUrl.replace("://", "://api.")
+    protected val apiUrl: String = baseUrl.replace("://", "://api."),
 ) : HttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    protected val json: Json by injectLazy()
+    /**
+     * Custom Json instance to make usage of `encodeDefaults`,
+     * which is not enabled on the injected instance of the app.
+     */
+    protected val json: Json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        encodeDefaults = true
+    }
 
     protected val intl by lazy { HeanCmsIntl(lang) }
 
@@ -57,7 +63,7 @@ abstract class HeanCms(
             order = "desc",
             orderBy = "total_views",
             status = "Ongoing",
-            type = "Comic"
+            type = "Comic",
         )
 
         val payload = json.encodeToString(payloadObj).toRequestBody(JSON_MEDIA_TYPE)
@@ -71,7 +77,7 @@ abstract class HeanCms(
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val json = response.body?.string().orEmpty()
+        val json = response.body.string()
 
         if (json.startsWith("{")) {
             val result = json.parseAs<HeanCmsQuerySearchDto>()
@@ -96,7 +102,7 @@ abstract class HeanCms(
             order = "desc",
             orderBy = "latest",
             status = "Ongoing",
-            type = "Comic"
+            type = "Comic",
         )
 
         val payload = json.encodeToString(payloadObj).toRequestBody(JSON_MEDIA_TYPE)
@@ -110,6 +116,17 @@ abstract class HeanCms(
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (!query.startsWith(SEARCH_PREFIX)) {
+            return super.fetchSearchManga(page, query, filters)
+        }
+
+        val slug = query.substringAfter(SEARCH_PREFIX)
+        val manga = SManga.create().apply { url = "/series/$slug" }
+
+        return fetchMangaDetails(manga).map { MangasPage(listOf(it), false) }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         /**
@@ -140,7 +157,7 @@ abstract class HeanCms(
             tagIds = filters.firstInstanceOrNull<GenreFilter>()?.state
                 ?.filter(Genre::state)
                 ?.map(Genre::id)
-                .orEmpty()
+                .orEmpty(),
         )
 
         val payload = json.encodeToString(payloadObj).toRequestBody(JSON_MEDIA_TYPE)
@@ -154,7 +171,7 @@ abstract class HeanCms(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.body?.string().orEmpty()
+        val json = response.body.string()
 
         if (response.request.url.pathSegments.last() == "search") {
             fetchAllTitles()
@@ -184,26 +201,17 @@ abstract class HeanCms(
         return MangasPage(mangaList, hasNextPage = false)
     }
 
-    // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(seriesDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override fun getMangaUrl(manga: SManga): String {
         val seriesSlug = manga.url
             .substringAfterLast("/")
             .replace(TIMESTAMP_REGEX, "")
 
         val currentSlug = seriesSlugMap?.get(seriesSlug)?.slug ?: seriesSlug
 
-        return GET("$baseUrl/series/$currentSlug", headers)
+        return "$baseUrl/series/$currentSlug"
     }
 
-    private fun seriesDetailsRequest(manga: SManga): Request {
+    override fun mangaDetailsRequest(manga: SManga): Request {
         val seriesSlug = manga.url
             .substringAfterLast("/")
             .replace(TIMESTAMP_REGEX, "")
@@ -227,11 +235,12 @@ abstract class HeanCms(
             ?: throw Exception(intl.urlChangedError(name))
 
         return seriesDetails.apply {
-            status = response.request.url.fragment?.toIntOrNull() ?: SManga.UNKNOWN
+            status = status.takeUnless { it == SManga.UNKNOWN }
+                ?: response.request.url.fragment?.toIntOrNull() ?: SManga.UNKNOWN
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = seriesDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<HeanCmsSeriesDto>()
@@ -243,6 +252,8 @@ abstract class HeanCms(
             .filter { it.date_upload <= currentTimestamp }
             .reversed()
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("#")
@@ -256,6 +267,14 @@ abstract class HeanCms(
 
     override fun pageListParse(response: Response): List<Page> {
         return response.parseAs<HeanCmsReaderDto>().content?.images.orEmpty()
+            .filterNot { imageUrl ->
+                // Their image server returns HTTP 403 for hidden files that starts
+                // with a dot in the file name. To avoid download errors, these are removed.
+                imageUrl
+                    .removeSuffix("/")
+                    .substringAfterLast("/")
+                    .startsWith(".")
+            }
             .mapIndexed { i, url ->
                 Page(i, imageUrl = if (url.startsWith("http")) url else "$apiUrl/$url")
             }
@@ -300,7 +319,7 @@ abstract class HeanCms(
 
             while (hasNextPage) {
                 val response = client.newCall(allTitlesRequest(page)).execute()
-                val json = response.body?.string().orEmpty()
+                val json = response.body.string()
 
                 if (json.startsWith("{")) {
                     val result = json.parseAs<HeanCmsQuerySearchDto>()
@@ -325,8 +344,7 @@ abstract class HeanCms(
             page = page,
             order = "desc",
             orderBy = "total_views",
-            status = "",
-            type = "Comic"
+            type = "Comic",
         )
 
         val payload = json.encodeToString(payloadObj).toRequestBody(JSON_MEDIA_TYPE)
@@ -348,9 +366,9 @@ abstract class HeanCms(
                     HeanCmsTitle(
                         slug = it.slug,
                         thumbnailFileName = it.thumbnail,
-                        status = it.status?.toStatus() ?: SManga.UNKNOWN
+                        status = it.status?.toStatus() ?: SManga.UNKNOWN,
                     )
-                }
+                },
             )
     }
 
@@ -361,14 +379,14 @@ abstract class HeanCms(
             Filter.Header(intl.filterWarning),
             StatusFilter(intl.statusFilterTitle, getStatusList()),
             SortByFilter(intl.sortByFilterTitle, getSortProperties()),
-            GenreFilter(intl.genreFilterTitle, genres).takeIf { genres.isNotEmpty() }
+            GenreFilter(intl.genreFilterTitle, genres).takeIf { genres.isNotEmpty() },
         )
 
         return FilterList(filters)
     }
 
     private inline fun <reified T> Response.parseAs(): T = use {
-        it.body?.string().orEmpty().parseAs()
+        it.body.string().parseAs()
     }
 
     private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
@@ -389,5 +407,7 @@ abstract class HeanCms(
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
         val TIMESTAMP_REGEX = "-\\d+$".toRegex()
+
+        const val SEARCH_PREFIX = "slug:"
     }
 }

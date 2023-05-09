@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.tapastic
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.net.Uri
 import android.webkit.CookieManager
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -80,7 +79,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                                     .path("/")
                                     .name("birthDate")
                                     .value("1994-01-01")
-                                    .build()
+                                    .build(),
                             )
                             add(
                                 Cookie.Builder()
@@ -88,14 +87,14 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                                     .path("/")
                                     .name("adjustedBirthDate")
                                     .value("1994-01-01")
-                                    .build()
+                                    .build(),
                             )
                         }
                     } else {
                         return mutableListOf()
                     }
                 }
-            }
+            },
         )
         .addInterceptor(TextInterceptor())
         .build()
@@ -182,7 +181,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                 "Mystery",
                 "Romance",
                 "Science fiction",
-                "Slice of life"
+                "Slice of life",
             )
         }
     }
@@ -224,15 +223,17 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                 url = "$baseUrl/mature".toHttpUrlOrNull()!!.newBuilder()
                 // Append only mature uri filters
                 filterList.forEach {
-                    if (it is UriFilter && it.isMature)
+                    if (it is UriFilter && it.isMature) {
                         it.addToUri(url)
+                    }
                 }
             } else {
                 url = "$baseUrl/comics".toHttpUrlOrNull()!!.newBuilder()
                 // Append only non-mature uri filters
                 filterList.forEach {
-                    if (it is UriFilter && !it.isMature)
+                    if (it is UriFilter && !it.isMature) {
                         it.addToUri(url)
+                    }
                 }
             }
         }
@@ -311,7 +312,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         fun parseChapters(page: Int) {
             val url = "$baseUrl/series/$mangaId/episodes?page=$page&sort=NEWEST&init_load=0&large=true&last_access=0&"
             val jsonResponse = client.newCall(GET(url, headers)).execute()
-            val json = json.parseToJsonElement(jsonResponse.body!!.string()).jsonObject["data"]!!.jsonObject
+            val json = json.parseToJsonElement(jsonResponse.body.string()).jsonObject["data"]!!.jsonObject
 
             Jsoup.parse(json["body"]!!.jsonPrimitive.content).select(chapterListSelector())
                 .let { list ->
@@ -360,8 +361,9 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                 val creator = document.select("a.name.js-fb-tracking")[0].text()
 
                 pages = pages + Page(
-                    pages.size, "",
-                    TextInterceptorHelper.createUrl(creator, episodeStory)
+                    pages.size,
+                    "",
+                    TextInterceptorHelper.createUrl(creator, episodeStory),
                 )
             }
         }
@@ -387,7 +389,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         Filter.Header("Mature filters"),
         MatureFilter("Show Mature Results Only"),
         MatureCategoryFilter(),
-        MatureGenreFilter()
+        MatureGenreFilter(),
     )
 
     private class CategoryFilter : UriSelectFilter(
@@ -400,9 +402,9 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
             Pair("TRENDING", "Trending"),
             Pair("FRESH", "Fresh"),
             Pair("BINGE", "Binge"),
-            Pair("ORIGINAL", "Tapas Originals")
+            Pair("ORIGINAL", "Tapas Originals"),
         ),
-        defaultValue = 1
+        defaultValue = 1,
     )
 
     private class GenreFilter : UriSelectFilter(
@@ -423,8 +425,8 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
             Pair("10", "Mystery"),
             Pair("5", "Romance"),
             Pair("4", "Science Fiction"),
-            Pair("1", "Slice of Life")
-        )
+            Pair("1", "Slice of Life"),
+        ),
     )
 
     private class StatusFilter : UriSelectFilter(
@@ -434,8 +436,8 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         arrayOf(
             Pair("NONE", "All"),
             Pair("F2R", "Free to read"),
-            Pair("PRM", "Premium")
-        )
+            Pair("PRM", "Premium"),
+        ),
     )
 
     private class MatureFilter(name: String) : Filter.CheckBox(name)
@@ -449,7 +451,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
             Pair("POPULAR", "Popular"),
             Pair("FRESH", "Fresh"),
         ),
-        defaultValue = 1
+        defaultValue = 1,
     )
 
     private class MatureGenreFilter : UriSelectFilter(
@@ -464,7 +466,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
             Pair("24", "Girls Love"),
             Pair("2", "Comedy"),
             Pair("6", "Horror"),
-        )
+        ),
     )
 
     private class SortFilter(
@@ -472,9 +474,9 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         var vals: Array<Pair<String, String>> = arrayOf(
             Pair("DATE", "Date"),
             Pair("LIKE", "Likes"),
-            Pair("SUBSCRIBE", "Subscribers")
+            Pair("SUBSCRIBE", "Subscribers"),
         ),
-        defaultValue: Int = 0
+        defaultValue: Int = 0,
     ) : Filter.Select<String>(name, vals.map { it.second }.toTypedArray(), defaultValue) {
         fun addToUri(uri: HttpUrl.Builder) {
             uri.addQueryParameter("s", vals[state].first)
@@ -493,13 +495,14 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         val uriParam: String,
         val vals: Array<Pair<String, String>>,
         val firstIsUnspecified: Boolean = false,
-        defaultValue: Int = 0
+        defaultValue: Int = 0,
     ) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
         UriFilter {
         override fun addToUri(uri: HttpUrl.Builder) {
-            if (state != 0 || !firstIsUnspecified)
+            if (state != 0 || !firstIsUnspecified) {
                 uri.addQueryParameter(uriParam, vals[state].first)
+            }
         }
     }
 

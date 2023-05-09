@@ -1,12 +1,20 @@
 package eu.kanade.tachiyomi.extension.ar.mangaswat
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import okhttp3.Headers
-import okhttp3.Request
-import org.json.JSONObject
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -17,22 +25,20 @@ class MangaSwat : MangaThemesia(
     mangaUrlDirectory = "/manga",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 ) {
+    private val defaultBaseUrl = "https://swatmanga.me"
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add(
-            "Accept",
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
-        )
-        .add("Accept-language", "en-US,en;q=0.9")
-        .add("Referer", baseUrl)
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("Referer", baseUrl)
-            .build()
-        return GET(page.imageUrl!!, newHeaders)
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
+
+    override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(1)
+        .build()
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override val seriesArtistSelector = "span:contains(الناشر) i"
     override val seriesAuthorSelector = "span:contains(المؤلف) i"
@@ -41,19 +47,49 @@ class MangaSwat : MangaThemesia(
     override val seriesStatusSelector = "span:contains(الحالة)"
     override val seriesDescriptionSelector = "span.desc"
 
-    override val pageSelector = "div#readerarea img"
-
     override fun pageListParse(document: Document): List<Page> {
-        var page: List<Page>? = null
-        val scriptContent = document.selectFirst("script:containsData(ts_reader)").data()
-        val removeHead = scriptContent.replace("ts_reader.run(", "").replace(");", "")
-        val jsonObject = JSONObject(removeHead)
-        val sourcesArray = jsonObject.getJSONArray("sources")
-        val imagesArray = sourcesArray.getJSONObject(0).getJSONArray("images")
-        page = List(imagesArray.length()) { i ->
-            Page(i, "", imagesArray[i].toString())
-        }
-
-        return page
+        val scriptContent = document.selectFirst("script:containsData(ts_reader)")!!.data()
+        val jsonString = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
+        val tsReader = json.decodeFromString<TSReader>(jsonString)
+        val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()
+        return imageUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
+
+    @Serializable
+    data class TSReader(
+        val sources: List<ReaderImageSource>,
+    )
+
+    @Serializable
+    data class ReaderImageSource(
+        val source: String,
+        val images: List<String>,
+    )
+
+    companion object {
+        private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
+        private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
+        private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
+        private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            this.setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+        screen.addPreference(baseUrlPref)
+
+        super.setupPreferenceScreen(screen)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 }

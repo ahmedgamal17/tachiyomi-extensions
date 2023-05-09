@@ -9,7 +9,6 @@ import okhttp3.Response
 class ManhuaES : Madara("Manhua ES", "https://manhuaes.com", "en") {
 
     // The website does not flag the content.
-    override val useLoadMoreSearch = false
     override val filterNonMangaItems = false
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -27,7 +26,7 @@ class ManhuaES : Madara("Manhua ES", "https://manhuaes.com", "en") {
 
     private fun isReleasedChapter(chapter: SChapter): Boolean {
         val document = client.newCall(
-            GET(chapter.url, headersBuilder().build())
+            GET(chapter.url, headersBuilder().build()),
         ).execute().asJsoup()
 
         return document.select(pageListParseSelector).isNotEmpty()

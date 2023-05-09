@@ -5,7 +5,12 @@ import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import java.text.SimpleDateFormat
 import java.util.TimeZone
 
-class YugenMangas : HeanCms("YugenMangas", "https://yugenmangas.com", "es") {
+class YugenMangas : HeanCms(
+    "YugenMangas",
+    "https://yugenmangas.com",
+    "es",
+    "https://api.yugenmangas.com",
+) {
 
     // Site changed from Madara to HeanCms.
     override val versionId = 2
@@ -64,6 +69,6 @@ class YugenMangas : HeanCms("YugenMangas", "https://yugenmangas.com", "es") {
         Genre("Transmigración", 34),
         Genre("Vida Escolar", 47),
         Genre("Yaoi", 43),
-        Genre("Yuri", 44)
+        Genre("Yuri", 44),
     )
 }

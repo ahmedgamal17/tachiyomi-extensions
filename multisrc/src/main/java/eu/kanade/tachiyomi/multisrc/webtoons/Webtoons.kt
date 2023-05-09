@@ -39,7 +39,7 @@ open class Webtoons(
     override val lang: String,
     open val langCode: String = lang,
     open val localeForCookie: String = lang,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -59,10 +59,10 @@ open class Webtoons(
                             .value(localeForCookie)
                             .name("needGDPR")
                             .value("false")
-                            .build()
+                            .build(),
                     )
                 }
-            }
+            },
         )
         .addInterceptor(::sslRetryInterceptor)
         .build()
@@ -113,7 +113,7 @@ open class Webtoons(
         var maxChild = 0
 
         // For ongoing webtoons rows are ordered by descending popularity, count how many rows there are
-        document.select("div#dailyList > div").forEach { day ->
+        document.select("div#dailyList .daily_section").forEach { day ->
             day.select("li").count().let { rowCount ->
                 if (rowCount > maxChild) maxChild = rowCount
             }
@@ -121,7 +121,7 @@ open class Webtoons(
 
         // Process each row
         for (i in 1..maxChild) {
-            document.select("div#dailyList > div li:nth-child($i) a").map { mangas.add(popularMangaFromElement(it)) }
+            document.select("div#dailyList .daily_section li:nth-child($i) a").map { mangas.add(popularMangaFromElement(it)) }
         }
 
         // Add completed webtoons, no sorting needed
@@ -149,8 +149,9 @@ open class Webtoons(
     override fun latestUpdatesNextPageSelector(): String? = null
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (!query.startsWith(URL_SEARCH_PREFIX))
+        if (!query.startsWith(URL_SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
+        }
 
         val emptyResult = Observable.just(MangasPage(emptyList(), false))
 
@@ -164,9 +165,9 @@ open class Webtoons(
             val title_no = url.queryParameter("title_no")
             val couldBeWebtoonOrEpisode = title_no != null && (url.pathSegments.size >= 3 && url.pathSegments.last().isNotEmpty())
             val isThisLang = "$url".startsWith("$baseUrl/$langCode")
-            if (! (couldBeWebtoonOrEpisode && isThisLang))
+            if (!(couldBeWebtoonOrEpisode && isThisLang)) {
                 emptyResult
-            else {
+            } else {
                 val potentialUrl = "${webtoonPath(url)}?title_no=$title_no"
                 fetchMangaDetails(SManga.create().apply { this.url = potentialUrl }).map {
                     it.url = potentialUrl
@@ -186,7 +187,7 @@ open class Webtoons(
         return GET(url.toString(), headers)
     }
 
-    override fun searchMangaSelector() = "#content > div.card_wrap.search li a"
+    override fun searchMangaSelector() = "#content > div.card_wrap.search ul:not(#filterLayer) li a"
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -195,7 +196,7 @@ open class Webtoons(
     open fun parseDetailsThumbnail(document: Document): String? {
         val picElement = document.select("#content > div.cont_box > div.detail_body")
         val discoverPic = document.select("#content > div.cont_box > div.detail_header > span.thmb")
-        return discoverPic.select("img").not("[alt='Representative image']").first()?.attr("src") ?: picElement.attr("style")?.substringAfter("url(")?.substringBeforeLast(")")
+        return discoverPic.select("img").not("[alt='Representative image']").first()?.attr("src") ?: picElement.attr("style").substringAfter("url(")?.substringBeforeLast(")")
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -203,7 +204,7 @@ open class Webtoons(
         val infoElement = document.select("#_asideDetail")
 
         val manga = SManga.create()
-        manga.title = document.selectFirst("h1.subj, h3.subj").text()
+        manga.title = document.selectFirst("h1.subj, h3.subj")!!.text()
         manga.author = detailElement.select(".author:nth-of-type(1)").first()?.ownText()
         manga.artist = detailElement.select(".author:nth-of-type(2)").first()?.ownText() ?: manga.author
         manga.genre = detailElement.select(".genre").joinToString(", ") { it.text() }
@@ -219,7 +220,7 @@ open class Webtoons(
         else -> SManga.UNKNOWN
     }
 
-    override fun imageUrlParse(document: Document): String = document.select("img").first().attr("src")
+    override fun imageUrlParse(document: Document): String = document.select("img").first()!!.attr("src")
 
     // Filters
 
@@ -227,7 +228,7 @@ open class Webtoons(
         return FilterList(
             Header("Query can not be blank"),
             Separator(),
-            SearchType(getOfficialList())
+            SearchType(getOfficialList()),
         )
     }
 
@@ -238,7 +239,7 @@ open class Webtoons(
     private fun getOfficialList() = arrayOf(
         Pair("Any", ""),
         Pair("Official only", "WEBTOON"),
-        Pair("Challenge only", "CHALLENGE")
+        Pair("Challenge only", "CHALLENGE"),
     )
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
@@ -259,7 +260,7 @@ open class Webtoons(
         if (element.select(".ico_bgm").isNotEmpty()) {
             chapter.name += " ♫"
         }
-        chapter.date_upload = element.select("a > div.row > div.col > div.sub_info > span.date").text()?.let { chapterParseDate(it) } ?: 0
+        chapter.date_upload = element.select("a > div.row > div.col > div.sub_info > span.date").text().let { chapterParseDate(it) } ?: 0
         return chapter
     }
 
@@ -287,7 +288,7 @@ open class Webtoons(
         val motiontoonPath = motiontoonPathRegex.find(docString)!!.destructured.toList()[0]
         val motiontoonResponse = client.newCall(GET(docUrl, headers)).execute()
 
-        val motiontoonJson = json.parseToJsonElement(motiontoonResponse.body!!.string()).jsonObject
+        val motiontoonJson = json.parseToJsonElement(motiontoonResponse.body.string()).jsonObject
         val motiontoonImages = motiontoonJson["assets"]!!.jsonObject["image"]!!.jsonObject
 
         return motiontoonImages.entries

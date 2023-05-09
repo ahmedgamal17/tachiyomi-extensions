@@ -124,7 +124,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div.barContent").first()
+        val infoElement = document.select("div.barContent").first()!!
 
         val manga = SManga.create()
         manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
@@ -160,7 +160,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     override fun chapterListSelector() = "table.listing tr:gt(1)"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()
+        val urlElement = element.select("a").first()!!
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
@@ -197,7 +197,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun getFilterList() = FilterList(
         Status(),
-        GenreList(getGenreList())
+        GenreList(getGenreList()),
     )
 
     // $("select[name=\"genres\"]").map((i,el) => `Genre("${$(el).next().text().trim()}", ${i})`).get().join(',\n')
@@ -250,7 +250,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         Genre("Video Games"),
         Genre("War"),
         Genre("Western"),
-        Genre("Zombies")
+        Genre("Zombies"),
     )
     // Preferences Code
 
@@ -285,7 +285,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val scriptUrl = rguardUrl ?: "$baseUrl/Scripts/rguard.min.js"
         val scriptRequest = GET(scriptUrl, headers, cache = cacheControl)
         val scriptResponse = client.newCall(scriptRequest).execute()
-        val scriptBody = scriptResponse.body?.string() ?: ""
+        val scriptBody = scriptResponse.body.string()
 
         val scriptParts = RGUARD_REGEX.find(scriptBody)?.groupValues?.drop(1)
             ?: throw Exception("Unable to parse rguard script")

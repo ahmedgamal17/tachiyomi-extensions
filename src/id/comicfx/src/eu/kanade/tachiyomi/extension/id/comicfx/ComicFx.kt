@@ -84,7 +84,7 @@ class ComicFx : ParsedHttpSource() {
     private val json: Json by injectLazy()
 
     private fun parseSearchApiResponse(response: Response): MangasPage {
-        val results = json.parseToJsonElement(response.body!!.string()).jsonObject["suggestions"]!!.jsonArray
+        val results = json.parseToJsonElement(response.body.string()).jsonObject["suggestions"]!!.jsonArray
         val manga = results.map {
             SManga.create().apply {
                 title = it.jsonObject["value"]!!.jsonPrimitive.content
@@ -144,8 +144,11 @@ class ComicFx : ParsedHttpSource() {
         document.selectFirst(".infokomik .type")?.ownText().takeIf { it.isNullOrBlank().not() }?.let { genres.add(it) }
         genre = genres.map { genre ->
             genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                if (char.isLowerCase()) char.titlecase(Locale.forLanguageTag(lang))
-                else char.toString()
+                if (char.isLowerCase()) {
+                    char.titlecase(Locale.forLanguageTag(lang))
+                } else {
+                    char.toString()
+                }
             }
         }
             .joinToString { it.trim() }
@@ -153,7 +156,7 @@ class ComicFx : ParsedHttpSource() {
         thumbnail_url = document.select(".thumb img").attr("abs:src")
     }
 
-    protected fun parseStatus(element: String?): Int = when {
+    private fun parseStatus(element: String?): Int = when {
         element == null -> SManga.UNKNOWN
         listOf("ongoing", "publishing").any { it.contains(element, ignoreCase = true) } -> SManga.ONGOING
         listOf("completed").any { it.contains(element, ignoreCase = true) } -> SManga.COMPLETED
@@ -194,8 +197,8 @@ class ComicFx : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        name = element.selectFirst("span.chapternum").text()
-        date_upload = parseDate(element.selectFirst("span.chapterdate").text())
+        name = element.selectFirst("span.chapternum")!!.text()
+        date_upload = parseDate(element.selectFirst("span.chapterdate")!!.text())
     }
 
     // Pages
@@ -276,8 +279,8 @@ class ComicFx : ParsedHttpSource() {
             Pair("28", "Sports"),
             Pair("29", "Supernatural"),
             Pair("30", "Tragedy"),
-            Pair("34", "Smut")
-        )
+            Pair("34", "Smut"),
+        ),
     )
 
     private class StatusFilter : UriPartFilter(
@@ -285,8 +288,8 @@ class ComicFx : ParsedHttpSource() {
         arrayOf(
             Pair("", "All"),
             Pair("1", "Ongoing"),
-            Pair("2", "Complete")
-        )
+            Pair("2", "Complete"),
+        ),
     )
 
     private class TypeFilter : UriPartFilter(
@@ -297,21 +300,19 @@ class ComicFx : ParsedHttpSource() {
             Pair("2", "Manhwa (Korean)"),
             Pair("3", "Manga"),
             Pair("4", "Oneshot"),
-        )
+        ),
     )
 
     private class ProjectFilter : UriPartFilter(
         "Filter Project",
         arrayOf(
             Pair("", "Show all manga"),
-            Pair("project-filter-on", "Show only project manga")
-        )
+            Pair("project-filter-on", "Show only project manga"),
+        ),
     )
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
     }
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 }

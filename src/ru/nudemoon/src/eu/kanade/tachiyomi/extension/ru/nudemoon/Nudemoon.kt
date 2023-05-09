@@ -98,7 +98,7 @@ class Nudemoon : ParsedHttpSource() {
                         order = arrayOf(
                             "all_manga?date",
                             "all_manga?views",
-                            "all_manga?like"
+                            "all_manga?like",
                         )[filter.state!!.index]
                     }
                 }
@@ -140,12 +140,12 @@ class Nudemoon : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-        val infoElement = document.select("table.news_pic2").first()
-        manga.title = document.select("h1").first().text().substringBefore(" / ").substringBefore(" №")
+        val infoElement = document.select("table.news_pic2").first()!!
+        manga.title = document.select("h1").first()!!.text().substringBefore(" / ").substringBefore(" №")
         manga.author = infoElement.select("a[href*=mangaka]").text()
         manga.genre = infoElement.select("div.tag-links a").joinToString { it.text() }
         manga.description = document.select(".description").text()
-        manga.thumbnail_url = document.selectFirst("meta[property=og:image]").attr("abs:content")
+        manga.thumbnail_url = document.selectFirst("meta[property=og:image]")!!.attr("abs:content")
 
         return manga
     }
@@ -177,13 +177,13 @@ class Nudemoon : ParsedHttpSource() {
                         }
                     }
                     chapter_number = 0F
-                }
+                },
             )
         } else {
             var pageListDocument: Document
             val pageListLink = allPageElement.attr("href")
             client.newCall(
-                GET(baseUrl + pageListLink, headers)
+                GET(baseUrl + pageListLink, headers),
             ).execute().run {
                 if (!isSuccessful) {
                     close()
@@ -202,6 +202,9 @@ class Nudemoon : ParsedHttpSource() {
         val nameAndUrl = element.select("tr[valign=top] a:has(h2)")
         name = nameAndUrl.select("h2").text()
         setUrlWithoutDomain(nameAndUrl.attr("abs:href"))
+        if (url.contains(baseUrl)) {
+            url = url.replace(baseUrl, "")
+        }
         val informBlock = element.select("tr[valign=top] td[align=left]")
         scanlator = informBlock.select("a[href*=perevod]").text()
         date_upload = informBlock.select("span.small2")
@@ -233,12 +236,12 @@ class Nudemoon : ParsedHttpSource() {
     private class OrderBy : Filter.Sort(
         "Сортировка",
         arrayOf("Дата", "Просмотры", "Лайки"),
-        Selection(1, false)
+        Selection(1, false),
     )
 
     override fun getFilterList() = FilterList(
         OrderBy(),
-        GenreList(getGenreList())
+        GenreList(getGenreList()),
     )
 
     private fun getGenreList() = listOf(
@@ -323,6 +326,6 @@ class Nudemoon : ParsedHttpSource() {
         Genre("netorare"),
         Genre("nipple penetration"),
         Genre("titsfuck"),
-        Genre("x-ray")
+        Genre("x-ray"),
     )
 }

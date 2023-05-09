@@ -1,3 +1,36 @@
+## 1.4.47
+
+Minimum Komga version required: `0.151.0`
+
+### Feat
+
+* add support for AVIF and HEIF image types
+
+## 1.4.46
+
+Minimum Komga version required: `0.151.0`
+
+### Feat
+
+* Update to extension-lib 1.4
+  - Clicking on chapter WebView should now open the chapter/book page.
+
+## 1.3.45
+
+Minimum Komga version required: `0.151.0`
+
+### Feat
+
+* Edit source display name
+
+## 1.3.44
+
+Minimum Komga version required: `0.151.0`
+
+### Fix
+
+* Better date/time parsing
+
 ## 1.3.43
 
 Minimum Komga version required: `0.151.0`

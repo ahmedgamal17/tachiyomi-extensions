@@ -9,14 +9,15 @@ import org.jsoup.nodes.Document
 import rx.Observable
 import rx.Single
 
-class Gufengmh : SinMH("古风漫画网", "https://www.123gf.com") {
+class Gufengmh : SinMH("古风漫画网", "https://www.gufengmh.com") {
 
     override fun mangaDetailsParse(document: Document): SManga =
         super.mangaDetailsParse(document).apply {
             if (status == SManga.COMPLETED) return@apply
             val firstChapter = document.selectFirst(".chapter-body li > a") ?: return@apply
-            if (firstChapter.attr("href").startsWith("javascript"))
+            if (firstChapter.attr("href").startsWith("javascript")) {
                 status = SManga.LICENSED
+            }
         }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
@@ -40,7 +41,7 @@ class Gufengmh : SinMH("古风漫画网", "https://www.123gf.com") {
                 val response = client.newCall(GET(baseUrl + prevUrl, headers)).execute()
                 chapter.url = buildString {
                     append(prevUrl, 0, prevUrl.lastIndexOf('/') + 1)
-                    append(ProgressiveParser(response.body!!.string()).substringBetween("""nextChapterData = {"id":""", ","))
+                    append(ProgressiveParser(response.body.string()).substringBetween("""nextChapterData = {"id":""", ","))
                     append(".html")
                 }
             }

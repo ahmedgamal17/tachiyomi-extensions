@@ -3,14 +3,14 @@ package eu.kanade.tachiyomi.multisrc.mangadventure
 /** Generic results wrapper schema. */
 @kotlinx.serialization.Serializable
 internal class Results<T>(
-    private val results: List<T>
+    private val results: List<T>,
 ) : Iterable<T> by results
 
 /** Generic paginator schema. */
 @kotlinx.serialization.Serializable
 internal class Paginator<T>(
     val last: Boolean,
-    private val results: List<T>
+    private val results: List<T>,
 ) : Iterable<T> by results
 
 /** Page model schema. */
@@ -19,7 +19,7 @@ internal data class Page(
     private val id: Int,
     val image: String,
     val number: Int,
-    val url: String
+    val url: String,
 ) {
     override fun equals(other: Any?) =
         this === other || other is Page && id == other.id
@@ -38,7 +38,7 @@ internal data class Chapter(
     val final: Boolean,
     val series: String,
     val groups: List<String>,
-    val full_title: String
+    val full_title: String,
 ) {
     override fun equals(other: Any?) =
         this === other || other is Chapter && id == other.id
@@ -53,12 +53,12 @@ internal data class Series(
     val title: String,
     val cover: String,
     val description: String? = null,
-    val completed: Boolean? = null,
+    val status: String? = null,
     val licensed: Boolean? = null,
     val aliases: List<String>? = null,
     val authors: List<String>? = null,
     val artists: List<String>? = null,
-    val categories: List<String>? = null
+    val categories: List<String>? = null,
 ) {
     override fun equals(other: Any?) =
         this === other || other is Series && slug == other.slug

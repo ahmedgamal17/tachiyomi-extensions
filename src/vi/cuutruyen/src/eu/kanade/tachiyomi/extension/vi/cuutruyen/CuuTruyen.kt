@@ -73,7 +73,7 @@ class CuuTruyen : HttpSource(), ConfigurableSource {
         val coverKey = preferences.coverQuality
         return MangasPage(
             responseDto.data.map { it.toSManga(coverKey) },
-            hasMoreResults
+            hasMoreResults,
         )
     }
 
@@ -99,7 +99,7 @@ class CuuTruyen : HttpSource(), ConfigurableSource {
                 fetchMangaDetails(
                     SManga.create().apply {
                         this.url = url
-                    }
+                    },
                 )
                     .map {
                         it.url = url
@@ -161,7 +161,7 @@ class CuuTruyen : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(body?.string().orEmpty())
+        json.decodeFromString(body.string())
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

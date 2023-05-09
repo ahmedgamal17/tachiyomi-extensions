@@ -18,9 +18,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -33,7 +33,7 @@ import uy.kohesive.injekt.api.get
 
 open class NHentai(
     override val lang: String,
-    private val nhLang: String
+    private val nhLang: String,
 ) : ConfigurableSource, ParsedHttpSource() {
 
     final override val baseUrl = "https://nhentai.net"
@@ -47,10 +47,6 @@ open class NHentai(
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
-
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder()
-            .set("User-Agent", USER_AGENT)
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -81,8 +77,9 @@ open class NHentai(
             }
         }
 
-        if (!preferences.contains(TITLE_PREF))
+        if (!preferences.contains(TITLE_PREF)) {
             preferences.edit().putString(TITLE_PREF, "full").apply()
+        }
 
         screen.addPreference(serverPref)
     }
@@ -96,7 +93,7 @@ open class NHentai(
         title = element.select("a > div").text().replace("\"", "").let {
             if (displayFullTitle) it.trim() else it.shortenTitle()
         }
-        thumbnail_url = element.select(".cover img").first().let { img ->
+        thumbnail_url = element.select(".cover img").first()!!.let { img ->
             if (img.hasAttr("data-src")) img.attr("abs:data-src") else img.attr("abs:src")
         }
     }
@@ -222,6 +219,7 @@ open class NHentai(
                 .plus("Favorited by: ${document.select("div#info i.fa-heart + span span").text().removeSurrounding("(", ")")}\n")
                 .plus(getTagDescription(document))
             genre = getTags(document)
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
@@ -235,7 +233,7 @@ open class NHentai(
                 scanlator = getGroups(document)
                 date_upload = getTime(document)
                 setUrlWithoutDomain(response.request.url.encodedPath)
-            }
+            },
         )
     }
 
@@ -244,11 +242,11 @@ open class NHentai(
     override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.select("script:containsData(media_server)").first().data()
-        val media_server = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!!.get(1)
+        val script = document.select("script:containsData(media_server)").first()!!.data()
+        val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
 
         return document.select("div.thumbs a > img").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:data-src").replace("t.nh", "i.nh").replace("t\\d+.nh".toRegex(), "i$media_server.nh").replace("t.", "."))
+            Page(i, "", img.attr("abs:data-src").replace("t.nh", "i.nh").replace("t\\d+.nh".toRegex(), "i$mediaServer.nh").replace("t.", "."))
         }
     }
 
@@ -271,7 +269,7 @@ open class NHentai(
         SortFilter(),
         OffsetPageFilter(),
         Filter.Header("Sort is ignored if favorites only"),
-        FavoriteFilter()
+        FavoriteFilter(),
     )
 
     class TagFilter : AdvSearchEntryFilter("Tags")
@@ -296,8 +294,8 @@ open class NHentai(
             Pair("Popular: All Time", "popular"),
             Pair("Popular: Week", "popular-week"),
             Pair("Popular: Today", "popular-today"),
-            Pair("Recent", "date")
-        )
+            Pair("Recent", "date"),
+        ),
     )
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
@@ -310,6 +308,5 @@ open class NHentai(
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         private const val TITLE_PREF = "Display manga title as:"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Mobile Safari/537.36"
     }
 }

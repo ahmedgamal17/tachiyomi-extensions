@@ -37,7 +37,7 @@ class Mangainua : ParsedHttpSource() {
     override fun popularMangaSelector() = "div.owl-carousel div.card--big"
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            element.select("h3.card__title a").first().let {
+            element.select("h3.card__title a").first()!!.let {
                 setUrlWithoutDomain(it.attr("href"))
                 title = it.text()
             }
@@ -53,7 +53,7 @@ class Mangainua : ParsedHttpSource() {
     override fun latestUpdatesSelector() = "main.main article.item"
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
-            element.select("h3.card__title a").first().let {
+            element.select("h3.card__title a").first()!!.let {
                 setUrlWithoutDomain(it.attr("href"))
                 title = it.text()
             }
@@ -64,8 +64,8 @@ class Mangainua : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.length > 2 ) {
-            return POST(
+        return if (query.length > 2) {
+            POST(
                 "$baseUrl/index.php?do=search",
                 body = FormBody.Builder()
                     .add("do", "search")
@@ -73,15 +73,17 @@ class Mangainua : ParsedHttpSource() {
                     .add("story", query)
                     .add("search_start", page.toString())
                     .build(),
-                headers = headers
+                headers = headers,
             )
-        } else return throw UnsupportedOperationException("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+        } else {
+            throw UnsupportedOperationException("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+        }
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            element.select("h3.card__title a").first().let {
+            element.select("h3.card__title a").first()!!.let {
                 setUrlWithoutDomain(it.attr("href"))
                 title = it.text()
             }
@@ -95,8 +97,8 @@ class Mangainua : ParsedHttpSource() {
         return SManga.create().apply {
             title = document.select("span.UAname").text()
             description = document.select("div.item__full-description").text()
-            genre = document.select("div.item__full-sideba--header:eq(4) span").first().select("a").joinToString { it.text() }
-            thumbnail_url = document.select("div.item__full-sidebar--poster img").first().attr("abs:src")
+            genre = document.select("div.item__full-sideba--header:eq(4) span").first()!!.select("a").joinToString { it.text() }
+            thumbnail_url = document.select("div.item__full-sidebar--poster img").first()!!.attr("abs:src")
         }
     }
 

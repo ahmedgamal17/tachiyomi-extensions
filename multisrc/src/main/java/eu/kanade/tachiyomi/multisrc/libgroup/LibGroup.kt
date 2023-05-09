@@ -52,7 +52,7 @@ import kotlin.random.Random
 abstract class LibGroup(
     override val name: String,
     override val baseUrl: String,
-    final override val lang: String
+    final override val lang: String,
 ) : ConfigurableSource, HttpSource() {
 
     private val json: Json by injectLazy()
@@ -70,10 +70,11 @@ abstract class LibGroup(
         val possibleType = urlRequest.substringAfterLast("/").substringBefore("?").split(".")
         return if (urlRequest.contains("/chapters/") and (possibleType.size == 2)) {
             val realType = possibleType[1]
-            val image = response.body?.byteString()?.toResponseBody("image/$realType".toMediaType())
+            val image = response.body.byteString().toResponseBody("image/$realType".toMediaType())
             response.newBuilder().body(image).build()
-        } else
+        } else {
             response
+        }
     }
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -81,10 +82,12 @@ abstract class LibGroup(
         .rateLimit(2)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            if (response.code == 419)
+            if (response.code == 419) {
                 throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
-            if (response.code == 404)
+            }
+            if (response.code == 404) {
                 throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView и обновите список глав.")
+            }
             return@addInterceptor response
         }
         .build()
@@ -117,7 +120,7 @@ abstract class LibGroup(
                 .asObservableSuccess()
                 .flatMap { response ->
                     // Obtain token
-                    val resBody = response.body!!.string()
+                    val resBody = response.body.string()
                     csrfToken = "_token\" content=\"(.*)\"".toRegex().find(resBody)!!.groups[1]!!.value
                     return@flatMap fetchLatestMangaFromApi(page)
                 }
@@ -126,7 +129,7 @@ abstract class LibGroup(
     }
 
     private fun fetchLatestMangaFromApi(page: Int): Observable<MangasPage> {
-        return client.newCall(POST("$baseUrl/filterlist?dir=desc&sort=last_chapter_at&page=$page", catalogHeaders()))
+        return client.newCall(POST("$baseUrl/filterlist?dir=desc&sort=last_chapter_at&page=$page&chapters[min]=1", catalogHeaders()))
             .asObservableSuccess()
             .map { response ->
                 latestUpdatesParse(response)
@@ -137,14 +140,14 @@ abstract class LibGroup(
         popularMangaParse(response)
 
     // Popular
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/?section=home-updates", headers)
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         if (csrfToken.isEmpty()) {
             return client.newCall(popularMangaRequest(page))
                 .asObservableSuccess()
                 .flatMap { response ->
                     // Obtain token
-                    val resBody = response.body!!.string()
+                    val resBody = response.body.string()
                     csrfToken = "_token\" content=\"(.*)\"".toRegex().find(resBody)!!.groups[1]!!.value
                     return@flatMap fetchPopularMangaFromApi(page)
                 }
@@ -153,7 +156,7 @@ abstract class LibGroup(
     }
 
     private fun fetchPopularMangaFromApi(page: Int): Observable<MangasPage> {
-        return client.newCall(POST("$baseUrl/filterlist?dir=desc&sort=views&page=$page", catalogHeaders()))
+        return client.newCall(POST("$baseUrl/filterlist?dir=desc&sort=views&page=$page&chapters[min]=1", catalogHeaders()))
             .asObservableSuccess()
             .map { response ->
                 popularMangaParse(response)
@@ -161,7 +164,7 @@ abstract class LibGroup(
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val resBody = response.body!!.string()
+        val resBody = response.body.string()
         val result = json.decodeFromString<JsonObject>(resBody)
         val items = result["items"]!!.jsonObject
         val popularMangas = items["data"]?.jsonArray?.map { popularMangaFromElement(it) }
@@ -180,8 +183,14 @@ abstract class LibGroup(
             isEng.equals("eng") && el.jsonObject["eng_name"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() -> el.jsonObject["eng_name"]!!.jsonPrimitive.content
             else -> el.jsonObject["name"]!!.jsonPrimitive.content
         }
-        thumbnail_url = if (el.jsonObject["coverImage"] != null) baseUrl + el.jsonObject["coverImage"]!!.jsonPrimitive.content
-        else baseUrl + "/uploads/cover/" + slug + "/cover/" + el.jsonObject["cover"]!!.jsonPrimitive.content + "_250x350.jpg"
+        thumbnail_url = if (el.jsonObject["coverImage"] != null) {
+            el.jsonObject["coverImage"]!!.jsonPrimitive.content
+        } else {
+            "/uploads/cover/" + slug + "/cover/" + el.jsonObject["cover"]!!.jsonPrimitive.content + "_250x350.jpg"
+        }
+        if (!thumbnail_url!!.contains("://")) {
+            thumbnail_url = baseUrl + thumbnail_url
+        }
         url = "/$slug"
     }
 
@@ -198,7 +207,7 @@ abstract class LibGroup(
 
         val manga = SManga.create()
 
-        val body = document.select("div.media-info-list").first()
+        val body = document.select("div.media-info-list").first()!!
         val rawCategory = document.select(".media-short-info a.media-short-info__item").text()
         val category = when {
             rawCategory == "Комикс западный" -> "Комикс"
@@ -208,8 +217,8 @@ abstract class LibGroup(
 
         val rawAgeStop = document.select(".media-short-info .media-short-info__item[data-caution]").text()
 
-        val ratingValue = document.select(".media-rating__value").last().text().toFloat() * 2
-        val ratingVotes = document.select(".media-rating__votes").last().text()
+        val ratingValue = document.select(".media-rating__value").last()!!.text().toFloat()
+        val ratingVotes = document.select(".media-rating__votes").last()!!.text()
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
             ratingValue > 8.5 -> "★★★★✬"
@@ -233,19 +242,19 @@ abstract class LibGroup(
         manga.author = body.select("div.media-info-list__title:contains(Автор) + div a").joinToString { it.text() }
         manga.artist = body.select("div.media-info-list__title:contains(Художник) + div a").joinToString { it.text() }
 
-        val StatusTranslate = body.select("div.media-info-list__title:contains(Статус перевода) + div").text().lowercase(Locale.ROOT)
-        val StatusTitle = body.select("div.media-info-list__title:contains(Статус тайтла) + div").text().lowercase(Locale.ROOT)
+        val statusTranslate = body.select("div.media-info-list__title:contains(Статус перевода) + div").text().lowercase(Locale.ROOT)
+        val statusTitle = body.select("div.media-info-list__title:contains(Статус тайтла) + div").text().lowercase(Locale.ROOT)
 
         manga.status = if (document.html().contains("paper empty section")
         ) {
             SManga.LICENSED
-        } else
+        } else {
             when {
-                StatusTranslate.contains("завершен") && StatusTitle.contains("приостановлен") || StatusTranslate.contains("заморожен") || StatusTranslate.contains("заброшен") -> SManga.ON_HIATUS
-                StatusTranslate.contains("завершен") && StatusTitle.contains("выпуск прекращён") -> SManga.CANCELLED
-                StatusTranslate.contains("продолжается") -> SManga.ONGOING
-                StatusTranslate.contains("завершен") -> SManga.COMPLETED
-                else -> when (StatusTitle) {
+                statusTranslate.contains("завершен") && statusTitle.contains("приостановлен") || statusTranslate.contains("заморожен") || statusTranslate.contains("заброшен") -> SManga.ON_HIATUS
+                statusTranslate.contains("завершен") && statusTitle.contains("выпуск прекращён") -> SManga.CANCELLED
+                statusTranslate.contains("продолжается") -> SManga.ONGOING
+                statusTranslate.contains("завершен") -> SManga.COMPLETED
+                else -> when (statusTitle) {
                     "онгоинг" -> SManga.ONGOING
                     "анонс" -> SManga.ONGOING
                     "завершён" -> SManga.COMPLETED
@@ -254,15 +263,18 @@ abstract class LibGroup(
                     else -> SManga.UNKNOWN
                 }
             }
+        }
         manga.genre = category + ", " + rawAgeStop + ", " + genres.joinToString { it.trim() }
 
-        val altName = if (dataManga!!.jsonObject["altNames"]?.jsonArray.orEmpty().isNotEmpty())
+        val altName = if (dataManga.jsonObject["altNames"]?.jsonArray.orEmpty().isNotEmpty()) {
             "Альтернативные названия:\n" + dataManga.jsonObject["altNames"]!!.jsonArray.joinToString(" / ") { it.jsonPrimitive.content } + "\n\n"
-        else ""
+        } else {
+            ""
+        }
 
         val mediaNameLanguage = when {
-            isEng.equals("eng") && dataManga!!.jsonObject["rusName"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() -> dataManga.jsonObject["rusName"]!!.jsonPrimitive.content + "\n"
-            isEng.equals("rus") && dataManga!!.jsonObject["engName"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() -> dataManga.jsonObject["engName"]!!.jsonPrimitive.content + "\n"
+            isEng.equals("eng") && dataManga.jsonObject["rusName"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() -> dataManga.jsonObject["rusName"]!!.jsonPrimitive.content + "\n"
+            isEng.equals("rus") && dataManga.jsonObject["engName"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() -> dataManga.jsonObject["engName"]!!.jsonPrimitive.content + "\n"
             else -> ""
         }
         manga.description = mediaNameLanguage + ratingStar + " " + ratingValue + " (голосов: " + ratingVotes + ")\n" + altName + document.select(".media-description__text").text()
@@ -280,12 +292,14 @@ abstract class LibGroup(
                 mangaDetailsParse(response)
             }
     }
+
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val rawAgeStop = document.select(".media-short-info .media-short-info__item[data-caution]").text()
-        if (rawAgeStop == "18+" && document.select(".m-menu__sign-in").isNotEmpty())
+        if (rawAgeStop == "18+" && document.select(".m-menu__sign-in").isNotEmpty()) {
             throw Exception("Для просмотра 18+ контента необходима авторизация через WebView")
+        }
         val redirect = document.html()
         if (redirect.contains("paper empty section")) {
             return emptyList()
@@ -338,27 +352,31 @@ abstract class LibGroup(
             val teamId = branch.jsonObject["id"]!!.jsonPrimitive.int
             val teams = branch.jsonObject["teams"]!!.jsonArray
             val isActive = teams.filter { it.jsonObject["is_active"]?.jsonPrimitive?.intOrNull == 1 }
-            val teamsBranch = if (isActive.size == 1)
+            val teamsBranch = if (isActive.size == 1) {
                 isActive[0].jsonObject["name"]?.jsonPrimitive?.contentOrNull
-            else if (teams.isNotEmpty() && isActive.isEmpty())
+            } else if (teams.isNotEmpty() && isActive.isEmpty()) {
                 teams[0].jsonObject["name"]?.jsonPrimitive?.contentOrNull
-            else "Неизвестный"
+            } else {
+                "Неизвестный"
+            }
             chapters = chaptersList
                 ?.filter { it.jsonObject["branch_id"]?.jsonPrimitive?.intOrNull == teamId && it.jsonObject["status"]?.jsonPrimitive?.intOrNull != 2 }
                 ?.map { chapterFromElement(it, sortingList, slug, userId, teamId, branches) }
             when (sortingList) {
                 "ms_mixing" -> {
                     chapters?.let {
-                        if ((tempChaptersList.size < it.size) && !groupTranslates.contains(teamsBranch.toString()))
+                        if ((tempChaptersList.size < it.size) && !groupTranslates.contains(teamsBranch.toString())) {
                             tempChaptersList.addAll(0, it)
-                        else
+                        } else {
                             tempChaptersList.addAll(it)
+                        }
                     }
                     chapters = tempChaptersList.distinctBy { volume.find(it.url)?.value + "--" + it.chapter_number }.sortedWith(compareBy({ -it.chapter_number }, { volume.find(it.url)?.value }))
                 }
                 "ms_combining" -> {
-                    if (!groupTranslates.contains(teamsBranch.toString()))
+                    if (!groupTranslates.contains(teamsBranch.toString())) {
                         chapters?.let { tempChaptersList.addAll(it) }
+                    }
                     chapters = tempChaptersList
                 }
             }
@@ -402,7 +420,11 @@ abstract class LibGroup(
                     val scanlatorId = chapterItem.jsonObject["chapter_scanlator_id"]!!.jsonPrimitive.int
                     if ((scanlatorId == team.jsonObject["id"]!!.jsonPrimitive.int) ||
                         (scanlatorId == 0 && team["is_active"]!!.jsonPrimitive.int == 1)
-                    ) return team["name"]!!.jsonPrimitive.content else scanlatorData = branch["teams"]!!.jsonArray[0].jsonObject["name"]!!.jsonPrimitive.content
+                    ) {
+                        return team["name"]!!.jsonPrimitive.content
+                    } else {
+                        scanlatorData = branch["teams"]!!.jsonArray[0].jsonObject["name"]!!.jsonPrimitive.content
+                    }
                 }
             }
         }
@@ -423,7 +445,7 @@ abstract class LibGroup(
 
         val chapInfo = document
             .select("script:containsData(window.__info)")
-            .first()
+            .first()!!
             .html()
             .split("window.__info = ")
             .last()
@@ -446,7 +468,7 @@ abstract class LibGroup(
         // Get pages
         val pagesArr = document
             .select("script:containsData(window.__pg)")
-            .first()
+            .first()!!
             .html()
             .trim()
             .removePrefix("window.__pg = ")
@@ -514,10 +536,10 @@ abstract class LibGroup(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (csrfToken.isEmpty()) {
             val tokenResponse = client.newCall(popularMangaRequest(page)).execute()
-            val resBody = tokenResponse.body!!.string()
+            val resBody = tokenResponse.body.string()
             csrfToken = "_token\" content=\"(.*)\"".toRegex().find(resBody)!!.groups[1]!!.value
         }
-        val url = "$baseUrl/filterlist?page=$page".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/filterlist?page=$page&chapters[min]=1".toHttpUrlOrNull()!!.newBuilder()
         if (query.isNotEmpty()) {
             url.addQueryParameter("name", query)
         }
@@ -557,6 +579,12 @@ abstract class LibGroup(
                         url.addQueryParameter(if (favorite.isIncluded()) "bookmarks[include][]" else "bookmarks[exclude][]", favorite.id)
                     }
                 }
+                is RequireChapters -> {
+                    if (filter.state == 1) {
+                        url.setQueryParameter("chapters[min]", "0")
+                    }
+                }
+                else -> {}
             }
         }
         return POST(url.toString(), catalogHeaders())
@@ -582,13 +610,14 @@ abstract class LibGroup(
         GenreList(getGenreList()),
         StatusList(getStatusList()),
         StatusTitleList(getStatusTitleList()),
-        MyList(getMyList())
+        MyList(getMyList()),
+        RequireChapters(),
     )
 
     private class OrderBy : Filter.Sort(
         "Сортировка",
         arrayOf("Рейтинг", "Имя", "Просмотры", "Дате добавления", "Дате обновления", "Кол-во глав"),
-        Selection(2, false)
+        Selection(2, false),
     )
 
     private fun getCategoryList() = listOf(
@@ -597,7 +626,7 @@ abstract class LibGroup(
         CheckFilter("Манхва", "5"),
         CheckFilter("Маньхуа", "6"),
         CheckFilter("Руманга", "8"),
-        CheckFilter("Комикс западный", "9")
+        CheckFilter("Комикс западный", "9"),
     )
 
     private fun getFormatList() = listOf(
@@ -606,14 +635,14 @@ abstract class LibGroup(
         SearchFilter("Додзинси", "3"),
         SearchFilter("Сингл", "4"),
         SearchFilter("В цвете", "5"),
-        SearchFilter("Веб", "6")
+        SearchFilter("Веб", "6"),
     )
 
     private fun getStatusList() = listOf(
         CheckFilter("Продолжается", "1"),
         CheckFilter("Завершен", "2"),
         CheckFilter("Заморожен", "3"),
-        CheckFilter("Заброшен", "4")
+        CheckFilter("Заброшен", "4"),
     )
 
     private fun getStatusTitleList() = listOf(
@@ -668,7 +697,7 @@ abstract class LibGroup(
         SearchFilter("эротика", "71"),
         SearchFilter("этти", "72"),
         SearchFilter("юри", "73"),
-        SearchFilter("яой", "74")
+        SearchFilter("яой", "74"),
     )
 
     private fun getMyList() = listOf(
@@ -676,8 +705,14 @@ abstract class LibGroup(
         SearchFilter("В планах", "2"),
         SearchFilter("Брошено", "3"),
         SearchFilter("Прочитано", "4"),
-        SearchFilter("Любимые", "5")
+        SearchFilter("Любимые", "5"),
     )
+
+    private class RequireChapters : Filter.Select<String>(
+        "Только проекты с главами",
+        arrayOf("Да", "Все"),
+    )
+
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
         private const val SERVER_PREF = "MangaLibImageServer"
@@ -719,7 +754,8 @@ abstract class LibGroup(
             key = SORTING_PREF
             title = SORTING_PREF_Title
             entries = arrayOf(
-                "Полный список (без повторных переводов)", "Все переводы (друг за другом)"
+                "Полный список (без повторных переводов)",
+                "Все переводы (друг за другом)",
             )
             entryValues = arrayOf("ms_mixing", "ms_combining")
             summary = "%s"

@@ -48,7 +48,7 @@ class HentaiHere : ParsedHttpSource() {
     override fun fetchSearchManga(
         page: Int,
         query: String,
-        filters: FilterList
+        filters: FilterList,
     ): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_ID_SEARCH)) {
             val id = query.removePrefix(PREFIX_ID_SEARCH)
@@ -198,9 +198,9 @@ class HentaiHere : ParsedHttpSource() {
     // Pages
     override fun pageListParse(response: Response): List<Page> =
         json.decodeFromString<List<String>>(
-            response.body!!.string()
+            response.body.string()
                 .substringAfter("var rff_imageList = ")
-                .substringBefore(";")
+                .substringBefore(";"),
         ).mapIndexed { i, imagePath ->
             Page(i, "", "$IMAGE_SERVER_URL/hentai$imagePath")
         }

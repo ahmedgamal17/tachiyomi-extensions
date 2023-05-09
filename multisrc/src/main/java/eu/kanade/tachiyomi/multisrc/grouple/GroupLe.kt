@@ -34,7 +34,7 @@ import java.util.regex.Pattern
 abstract class GroupLe(
     override val name: String,
     override val baseUrl: String,
-    final override val lang: String
+    final override val lang: String,
 ) : ConfigurableSource, ParsedHttpSource() {
 
     private val preferences: SharedPreferences by lazy {
@@ -48,8 +48,13 @@ abstract class GroupLe(
         .addNetworkInterceptor { chain ->
             val originalRequest = chain.request()
             val response = chain.proceed(originalRequest)
-            if (originalRequest.url.toString().contains(baseUrl) and (originalRequest.url.toString().contains("internal/redirect") or (response.code == 301)))
-                throw IOException("Ссылка на мангу была изменена. Перемегрируйте мангу на тотже (или смежный с GroupLe) источник или передабавте из Поисковика/Каталога.")
+            if (originalRequest.url.toString().contains(baseUrl) and (
+                originalRequest.url.toString()
+                    .contains("internal/redirect") or (response.code == 301)
+                )
+            ) {
+                throw IOException("Ссылка на мангу была изменена. Перемигрируйте мангу на тот же (или смежный с GroupLe) источник или передобавьте из Поисковика/Каталога.")
+            }
             response
         }
         .build()
@@ -72,8 +77,9 @@ abstract class GroupLe(
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select("img.lazy").first()?.attr("data-original")?.replace("_p.", ".")
-        element.select("h3 > a").first().let {
+        manga.thumbnail_url =
+            element.select("img.lazy").first()?.attr("data-original")?.replace("_p.", ".")
+        element.select("h3 > a").first()!!.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.attr("title")
         }
@@ -94,7 +100,9 @@ abstract class GroupLe(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/advanced?offset=${50 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
+        val url =
+            "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}".toHttpUrlOrNull()!!
+                .newBuilder()
         if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
         }
@@ -102,17 +110,20 @@ abstract class GroupLe(
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select(".expandable").first()
+        val infoElement = document.select(".expandable").first()!!
         val rawCategory = infoElement.select("span.elem_category").text()
-        val category = if (rawCategory.isNotEmpty()) {
-            rawCategory
-        } else {
+        val category = rawCategory.ifEmpty {
             "манга"
         }
 
-        val ratingValue = infoElement.select(".col-sm-7 .rating-block").attr("data-score").toFloat() * 2
-        val ratingValueOver = infoElement.select(".info-icon").attr("data-content").substringBeforeLast("/5</b><br/>").substringAfterLast(": <b>").replace(",", ".").toFloat() * 2
-        val ratingVotes = infoElement.select(".col-sm-7 .user-rating meta[itemprop=\"ratingCount\"]").attr("content")
+        val ratingValue =
+            infoElement.select(".rating-block").attr("data-score").toFloat() * 2
+        val ratingValueOver =
+            infoElement.select(".info-icon").attr("data-content").substringBeforeLast("/5</b><br/>")
+                .substringAfterLast(": <b>").replace(",", ".").toFloat() * 2
+        val ratingVotes =
+            infoElement.select(".col-sm-7 .user-rating meta[itemprop=\"ratingCount\"]")
+                .attr("content")
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
             ratingValue > 8.5 -> "★★★★✬"
@@ -126,8 +137,10 @@ abstract class GroupLe(
             ratingValue > 0.5 -> "✬☆☆☆☆"
             else -> "☆☆☆☆☆"
         }
-        val rawAgeValue = infoElement.select(".elem_limitation .element-link").first()?.text() ?: ""
-        val rawAgeStop = when (rawAgeValue) {
+        val rawAgeStop = when (
+            val rawAgeValue =
+                infoElement.select(".elem_limitation .element-link").first()?.text() ?: ""
+        ) {
             "NC-17" -> "18+"
             "R18+" -> "18+"
             "R" -> "16+"
@@ -137,21 +150,29 @@ abstract class GroupLe(
             else -> rawAgeValue
         }
         val manga = SManga.create()
-        var authorElement = infoElement.select("span.elem_author").first()?.text()
-        if (authorElement == null) {
-            authorElement = infoElement.select("span.elem_screenwriter").first()?.text()
-        }
         manga.title = document.select("h1.names .name").text()
-        manga.author = authorElement
+        manga.author = infoElement.select("span.elem_author").first()?.text() ?: infoElement.select(
+            "span.elem_screenwriter",
+        ).first()?.text()
         manga.artist = infoElement.select("span.elem_illustrator").first()?.text()
-        manga.genre = (category + ", " + rawAgeStop + ", " + infoElement.select("span.elem_genre").text() + ", " + infoElement.select("span.elem_tag").text()).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim().lowercase() }
-        var altName = ""
-        if (infoElement.select(".another-names").isNotEmpty()) {
-            altName = "Альтернативные названия:\n" + infoElement.select(".another-names").text() + "\n\n"
+        manga.genre = (
+            "$category, $rawAgeStop, " + infoElement.select("span.elem_genre")
+                .text() + ", " + infoElement.select("span.elem_tag").text()
+            ).split(", ")
+            .filter { it.isNotEmpty() }.joinToString { it.trim().lowercase() }
+        val altName = if (infoElement.select(".another-names").isNotEmpty()) {
+            "Альтернативные названия:\n" + infoElement.select(".another-names").text() + "\n\n"
+        } else {
+            ""
         }
-        manga.description = ratingStar + " " + ratingValue + "[ⓘ" + ratingValueOver + "]" + " (голосов: " + ratingVotes + ")\n" + altName + document.select("div#tab-description  .manga-description").text()
+        manga.description =
+            "$ratingStar $ratingValue[ⓘ$ratingValueOver] (голосов: $ratingVotes)\n$altName" + document.select(
+            "div#tab-description  .manga-description",
+        ).text()
         manga.status = when {
-            infoElement.html().contains("Запрещена публикация произведения по копирайту") || infoElement.html().contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
+            infoElement.html()
+                .contains("Запрещена публикация произведения по копирайту") || infoElement.html()
+                .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
             infoElement.html().contains("<b>Сингл</b>") -> SManga.COMPLETED
             else ->
                 when (infoElement.select("p:contains(Перевод:) span").first()?.text()) {
@@ -183,24 +204,26 @@ abstract class GroupLe(
         return document.select(chapterListSelector()).map { chapterFromElement(it, manga) }
     }
 
-    override fun chapterListSelector() = "div.chapters-link > table > tbody > tr:has(td > a):has(td.date:not(.text-info))"
+    override fun chapterListSelector() =
+        "div.chapters-link > table > tbody > tr:has(td > a):has(td.date:not(.text-info))"
 
     private fun chapterFromElement(element: Element, manga: SManga): SChapter {
-        val urlElement = element.select("a.chapter-link").first()
-        val chapterInf = element.select("td.item-title").first()
+        val urlElement = element.select("a.chapter-link").first()!!
+        val chapterInf = element.select("td.item-title").first()!!
         val urlText = urlElement.text()
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href") + "?mtr=true") // mtr is 18+ skip
 
-        var translators = ""
         val translatorElement = urlElement.attr("title")
-        if (!translatorElement.isNullOrBlank()) {
-            translators = translatorElement
+
+        chapter.scanlator = if (!translatorElement.isNullOrBlank()) {
+            translatorElement
                 .replace("(Переводчик),", "&")
                 .removeSuffix(" (Переводчик)")
+        } else {
+            ""
         }
-        chapter.scanlator = translators
 
         chapter.name = urlText.removeSuffix(" новое").trim()
         if (manga.title.length > 25) {
@@ -236,24 +259,49 @@ abstract class GroupLe(
         val single = Regex("""\s*Сингл\s*""")
         when {
             extra.containsMatchIn(chapter.name) -> {
-                if (chapter.name.substringAfter("Экстра").trim().isEmpty())
-                    chapter.name = chapter.name.replaceFirst(" ", " - " + DecimalFormat("#,###.##").format(chapter.chapter_number).replace(",", ".") + " ")
+                if (chapter.name.substringAfter("Экстра").trim().isEmpty()) {
+                    chapter.name = chapter.name.replaceFirst(
+                        " ",
+                        " - " + DecimalFormat("#,###.##").format(chapter.chapter_number)
+                            .replace(",", ".") + " ",
+                    )
+                }
             }
 
             single.containsMatchIn(chapter.name) -> {
-                if (chapter.name.substringAfter("Сингл").trim().isEmpty())
-                    chapter.name = DecimalFormat("#,###.##").format(chapter.chapter_number).replace(",", ".") + " " + chapter.name
+                if (chapter.name.substringAfter("Сингл").trim().isEmpty()) {
+                    chapter.name = DecimalFormat("#,###.##").format(chapter.chapter_number)
+                        .replace(",", ".") + " " + chapter.name
+                }
             }
         }
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val html = response.body!!.string()
+        val document = response.asJsoup()
 
-        val readerMark = "rm_h.initReader( ["
+        val html = document.html()
+
+        var readerMark = "rm_h.initReader( ["
 
         if (!html.contains(readerMark)) {
-            throw Exception("Для просмотра 18+ контента необходима авторизация через WebView")
+            readerMark = "rm_h.readerInit( 0,["
+        }
+
+        if (!html.contains(readerMark)) {
+            val isSourceSelector = ".account-menu"
+
+            val isAuthSelector = ".user-avatar"
+
+            val isAdultContent = document.select(isSourceSelector).let {
+                it.isNotEmpty() && it.select(isAuthSelector).isNullOrEmpty()
+            }
+
+            if (isAdultContent) {
+                throw Exception("Для просмотра 18+ контента необходима авторизация через WebView")
+            }
+
+            throw Exception("Не удалось загрузить главу. Url: ${response.request.url}")
         }
 
         val beginIndex = html.indexOf(readerMark)
@@ -277,10 +325,13 @@ abstract class GroupLe(
                     urlParts[1] + urlParts[0] + urlParts[2]
                 }
             }
-            if (!url.contains("://"))
+            if (!url.contains("://")) {
                 url = "https:$url"
-            if (url.contains("one-way.work")) // domain that does not need a token
+            }
+            if (url.contains("one-way.work")) {
+                // domain that does not need a token
                 url = url.substringBefore("?")
+            }
             pages.add(Page(i++, "", url.replace("//resh", "//h")))
         }
         return pages
@@ -304,7 +355,11 @@ abstract class GroupLe(
         return GET("$baseUrl/$id", headers)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
             client.newCall(searchMangaByIdRequest(realQuery))
@@ -327,7 +382,11 @@ abstract class GroupLe(
         screen.addPreference(screen.editTextPreference(UAGENT_TITLE, UAGENT_DEFAULT, uagent))
     }
 
-    private fun androidx.preference.PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference {
+    private fun androidx.preference.PreferenceScreen.editTextPreference(
+        title: String,
+        default: String,
+        value: String,
+    ): androidx.preference.EditTextPreference {
         return androidx.preference.EditTextPreference(context).apply {
             key = title
             this.title = title
@@ -337,7 +396,11 @@ abstract class GroupLe(
             setOnPreferenceChangeListener { _, newValue ->
                 try {
                     val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast.makeText(context, "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        context,
+                        "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
+                        Toast.LENGTH_LONG,
+                    ).show()
                     res
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -346,6 +409,7 @@ abstract class GroupLe(
             }
         }
     }
+
     companion object {
         private const val UAGENT_TITLE = "User-Agent(для некоторых стран)"
         private const val UAGENT_DEFAULT = "arora"

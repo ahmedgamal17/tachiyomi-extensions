@@ -65,10 +65,11 @@ class TwoKinds : HttpSource() {
 
     // the manga is one and only, but still write the data again to avoid bugs in backup restore
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        if (manga.url == "1")
+        if (manga.url == "1") {
             return Observable.just(mangaSinglePages())
-        else
+        } else {
             return Observable.just(manga20Pages())
+        }
     }
 
     override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
@@ -91,7 +92,7 @@ class TwoKinds : HttpSource() {
 
     data class TwoKindsPage(val url: String, val name: String)
 
-    fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
+    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val document = response.asJsoup()
 
         val pages = document.select(".chapter-links")
@@ -99,7 +100,7 @@ class TwoKinds : HttpSource() {
             .map { a ->
                 // /comic/1185halloween/ -> 1185halloween
                 val urlPart = a.attr("href").split("/")[2]
-                val name = a.selectFirst("span").text()
+                val name = a.selectFirst("span")!!.text()
 
                 TwoKindsPage(urlPart, name)
             }
@@ -121,7 +122,7 @@ class TwoKinds : HttpSource() {
                 SChapter.create().apply {
                     url = "20-${pages[i].url}"
                     name = "Pages ${pages[i].name}-${pages[min(pages.size, i + 20) - 1].name}"
-                }
+                },
             )
         }
         return chapters.reversed()
@@ -131,8 +132,8 @@ class TwoKinds : HttpSource() {
         if (chapter.url.startsWith("1")) {
             return Observable.just(
                 listOf(
-                    Page(0, baseUrl + "/comic/${chapter.url.substringAfter("-")}/")
-                )
+                    Page(0, baseUrl + "/comic/${chapter.url.substringAfter("-")}/"),
+                ),
             )
         } else {
             val firstPage = chapter.url.substringAfter("-")
@@ -143,7 +144,7 @@ class TwoKinds : HttpSource() {
                 .map { a ->
                     // /comic/1185halloween/ -> 1185halloween
                     val urlPart = a.attr("href").split("/")[2]
-                    val name = a.selectFirst("span").text()
+                    val name = a.selectFirst("span")!!.text()
 
                     TwoKindsPage(urlPart, name)
                 }
@@ -156,7 +157,7 @@ class TwoKinds : HttpSource() {
                     .subList(firstPageIdx, lastPageIdx)
                     .mapIndexed { idx, page ->
                         Page(idx, baseUrl + "/comic/${page.url}/")
-                    }
+                    },
             )
         }
     }
@@ -166,7 +167,7 @@ class TwoKinds : HttpSource() {
     override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
 
-        return document.select("#content article img").first().attr("src")
+        return document.select("#content article img").first()!!.attr("src")
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Search functionality is not available.")

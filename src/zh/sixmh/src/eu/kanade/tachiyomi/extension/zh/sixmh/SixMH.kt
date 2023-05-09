@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.zh.sixmh
 import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -37,9 +36,15 @@ class SixMH : HttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
 
+    private val isCi = System.getenv("CI") == "true"
+    override val baseUrl get() = when {
+        isCi -> MIRRORS.zip(MIRROR_NAMES) { domain, name -> "http://www.$domain#$name" }.joinToString()
+        else -> _baseUrl
+    }
+
     private val mirrorIndex: Int
     private val pcUrl: String
-    override val baseUrl: String
+    private val _baseUrl: String
 
     init {
         val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -53,7 +58,7 @@ class SixMH : HttpSource(), ConfigurableSource {
 
         mirrorIndex = index
         pcUrl = "http://www.$domain"
-        baseUrl = "http://$domain"
+        _baseUrl = "http://$domain"
     }
 
     private val json: Json by injectLazy()
@@ -67,12 +72,12 @@ class SixMH : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val imgSelector = Evaluator.Tag("img")
-        val items = document.selectFirst(Evaluator.Class("cy_list_mh")).children().map {
+        val items = document.selectFirst(Evaluator.Class("cy_list_mh"))!!.children().map {
             SManga.create().apply {
                 val link = it.child(1).child(0)
                 url = link.attr("href")
                 title = link.ownText()
-                thumbnail_url = it.selectFirst(imgSelector).attr("src")
+                thumbnail_url = it.selectFirst(imgSelector)!!.attr("src")
             }
         }
         val hasNextPage = document.selectFirst(Evaluator.Class("thisclass"))?.nextElementSibling() != null
@@ -108,7 +113,7 @@ class SixMH : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         val result = SManga.create().apply {
-            val box = document.selectFirst(Evaluator.Class("cy_info"))
+            val box = document.selectFirst(Evaluator.Class("cy_info"))!!
             val details = box.getElementsByTag("span")
             author = details[0].text().removePrefix("作者：")
             status = when (details[1].text().removePrefix("状态：").trimStart()) {
@@ -121,8 +126,8 @@ class SixMH : HttpSource(), ConfigurableSource {
                 details[3].ownText().removePrefix("标签：").split(Regex("[ -~]+"))
                     .filterTo(this) { it.isNotEmpty() }
             }.joinToString()
-            description = box.selectFirst(Evaluator.Tag("p")).ownText()
-            thumbnail_url = box.selectFirst(Evaluator.Tag("img")).run {
+            description = box.selectFirst(Evaluator.Tag("p"))!!.ownText()
+            thumbnail_url = box.selectFirst(Evaluator.Tag("img"))!!.run {
                 attr("data-src").ifEmpty { attr("src") }
             }
         }
@@ -134,7 +139,7 @@ class SixMH : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val list = document.selectFirst(Evaluator.Class("cy_plist"))
+        val list = document.selectFirst(Evaluator.Class("cy_plist"))!!
             .child(0).children().map {
                 val element = it.child(0)
                 SChapter.create().apply {
@@ -164,7 +169,7 @@ class SixMH : HttpSource(), ConfigurableSource {
             }
         }
 
-        if (isNewDateLogic && list.isNotEmpty()) {
+        if (list.isNotEmpty()) {
             document.selectFirst(".cy_zhangjie_top font")?.run {
                 list[0].date_upload = dateFormat.parse(ownText())?.time ?: 0
             }
@@ -175,7 +180,7 @@ class SixMH : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = Unpacker.unpack(response.body!!.string(), "[", "]")
+        val result = Unpacker.unpack(response.body.string(), "[", "]")
             .ifEmpty { return emptyList() }
             .replace("\\", "")
             .removeSurrounding("\"").split("\",\"")
@@ -185,7 +190,7 @@ class SixMH : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
 
     private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(body!!.byteStream())
+        json.decodeFromStream(body.byteStream())
     }
 
     override fun getFilterList() = FilterList(listOf(PageFilter()))
@@ -208,10 +213,9 @@ class SixMH : HttpSource(), ConfigurableSource {
         const val MIRROR_PREF = "MIRROR"
 
         /** Note: mirror index affects [chapterListParse] */
-        val MIRRORS get() = arrayOf("6mh66.com", "qiximh3.com")
+        val MIRRORS get() = arrayOf("6mh67.com", "qiximh3.com")
         val MIRROR_NAMES get() = arrayOf("6漫画", "七夕漫画")
 
-        private val isNewDateLogic = AppInfo.getVersionCode() >= 81
         private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH) }
     }
 }

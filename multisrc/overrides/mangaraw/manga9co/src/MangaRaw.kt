@@ -22,8 +22,14 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
     override val versionId = 2
     override val id = 4572869149806246133
 
+    private val isCi = System.getenv("CI") == "true"
+    override val baseUrl get() = when {
+        isCi -> MIRRORS.joinToString("#, ") { "https://$it" }
+        else -> _baseUrl
+    }
+
     override val supportsLatest = true
-    override val baseUrl: String
+    private val _baseUrl: String
     private val selectors: Selectors
     private val needUrlSanitize: Boolean
     private val isPagesShuffled: Boolean
@@ -38,7 +44,7 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
             preferences.edit().putString(MIRROR_PREF, mirrorIndex.toString()).apply()
         }
 
-        baseUrl = "https://" + mirrors[mirrorIndex]
+        _baseUrl = "https://" + mirrors[mirrorIndex]
         selectors = getSelectors(mirrorIndex)
         needUrlSanitize = needUrlSanitize(mirrorIndex)
         isPagesShuffled = isPagesShuffled(mirrorIndex)
@@ -58,10 +64,10 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
         GET("$baseUrl/?s=$query&page=$page", headers)
 
     override fun Document.getSanitizedDetails(): Element =
-        selectFirst(selectors.detailsSelector).apply {
+        selectFirst(selectors.detailsSelector)!!.apply {
             val recommendClass = selectors.recommendClass
             children().find { it.hasClass(recommendClass) }?.remove()
-            selectFirst(Evaluator.Class("list-scoll")).remove()
+            selectFirst(Evaluator.Class("list-scoll"))!!.remove()
         }
 
     override fun chapterListSelector() = ".list-scoll a"
@@ -71,7 +77,7 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         if (!isPagesShuffled) return super.pageListParse(response)
-        val html = response.body!!.string()
+        val html = response.body.string()
         val imageList = ImageListParser(html, 32).getImageList() ?: return emptyList()
         return imageList.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)

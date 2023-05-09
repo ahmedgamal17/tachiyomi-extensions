@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.multisrc.madtheme
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -35,17 +34,13 @@ abstract class MadTheme(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyy", Locale.US)
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyy", Locale.US),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost("https://s1.mbcdnv1.xyz".toHttpUrl(), 1, 1)
-        .rateLimitHost("https://s1.mbcdnv2.xyz".toHttpUrl(), 1, 1)
-        .rateLimitHost("https://s1.mbcdnv3.xyz".toHttpUrl(), 1, 1)
-        .rateLimitHost("https://s1.mbcdnv4.xyz".toHttpUrl(), 1, 1)
-        .rateLimitHost("https://s1.mbcdnv5.xyz".toHttpUrl(), 1, 1)
+        .rateLimit(1, 1)
         .build()
 
     // TODO: better cookie sharing
@@ -180,8 +175,8 @@ abstract class MadTheme(
             return super.chapterListParse(response)
         }
 
-        // Try to use message from site
-        response.body?.let { body ->
+        // Try to show message/error from site
+        response.body.let { body ->
             json.decodeFromString<JsonObject>(body.string())["message"]
                 ?.jsonPrimitive
                 ?.content
@@ -205,57 +200,69 @@ abstract class MadTheme(
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         // Not using setUrlWithoutDomain() to support external chapters
-        url = element.selectFirst("a")
+        url = element.selectFirst("a")!!
             .absUrl("href")
             .removePrefix(baseUrl)
 
         name = element.select(".chapter-title").first()!!.text()
         date_upload = parseChapterDate(element.select(".chapter-update").first()?.text())
-        chapter_number = name.substringAfterLast(' ').toFloatOrNull() ?: -1f
     }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
-        val html = document.html()!!
+        val html = document.html()
 
         if (!html.contains("var mainServer = \"")) {
-            // No fancy CDN
-            return document.select("#chapter-images img").mapIndexed { index, element ->
-                Page(index, "", element.attr("abs:data-src"))
+            val chapterImagesFromHtml = document.select("#chapter-images img")
+
+            // 17/03/2023: Certain hosts only embed two pages in their "#chapter-images" and leave
+            // the rest to be lazily(?) loaded by javascript. Let's extract `chapImages` and compare
+            // the count against our select query. If both counts are the same, extract the original
+            // images directly from the <img> tags otherwise pick the higher count. (heuristic)
+            // First things first, let's verify `chapImages` actually exists.
+            if (html.contains("var chapImages = '")) {
+                val chapterImagesFromJs = html
+                    .substringAfter("var chapImages = '")
+                    .substringBefore("'")
+                    .split(',')
+
+                // Make sure chapter images we've got from javascript all have a host, otherwise
+                // we've got no choice but to fallback to chapter images from HTML.
+                // TODO: This might need to be solved one day ^
+                if (chapterImagesFromJs.all { e ->
+                    e.startsWith("http://") || e.startsWith("https://")
+                }
+                ) {
+                    // Great, we can use these.
+                    if (chapterImagesFromHtml.count() < chapterImagesFromJs.count()) {
+                        // Seems like we've hit such a host, let's use the images we've obtained
+                        // from the javascript string.
+                        return chapterImagesFromJs.mapIndexed { index, path ->
+                            Page(index, imageUrl = path)
+                        }
+                    }
+                }
+            }
+
+            // No fancy CDN, all images are available directly in <img> tags (hopefully)
+            return chapterImagesFromHtml.mapIndexed { index, element ->
+                Page(index, imageUrl = element.attr("abs:data-src"))
             }
         }
 
-        val scheme = baseUrl.toHttpUrl().scheme + "://"
-
-        val mainCdn = html
+        // While the site may support multiple CDN hosts, we have opted to ignore those
+        val mainServer = html
             .substringAfter("var mainServer = \"")
             .substringBefore("\"")
+        val schemePrefix = if (mainServer.startsWith("//")) "https:" else ""
 
-        val mainCdnHttp = (scheme + mainCdn).toHttpUrl()
-        CDN_URL = scheme + mainCdnHttp.host
-        CDN_PATH = mainCdnHttp.encodedPath
-
-        val chImages = html
+        val chapImages = html
             .substringAfter("var chapImages = '")
             .substringBefore("'")
             .split(',')
 
-        if (html.contains("var multiServers = true")) {
-            val altCDNs = json.decodeFromString<List<String>>(
-                html
-                    .substringAfter("var imageServers = ")
-                    .substringBefore("\n")
-            )
-            CDN_URL_ALT = altCDNs.mapNotNull {
-                val url = scheme + it
-                if (!(CDN_URL!!).contains(url)) url else null
-            }
-        }
-
-        // Disabling alt CDNs until fallback can be implemented
-        val allCDN = listOf(CDN_URL) // + CDN_URL_ALT
-        return chImages.mapIndexed { index, img ->
-            Page(index, "", allCDN.random() + CDN_PATH + img)
+        return chapImages.mapIndexed { index, path ->
+            Page(index, imageUrl = "$schemePrefix$mainServer$path")
         }
     }
 
@@ -335,7 +342,7 @@ abstract class MadTheme(
             Pair("All", "all"),
             Pair("Ongoing", "ongoing"),
             Pair("Completed", "completed"),
-        )
+        ),
     )
 
     class OrderFilter(state: Int = 0) : UriPartFilter(
@@ -347,22 +354,15 @@ abstract class MadTheme(
             Pair("Name A-Z", "name"),
             Pair("Rating", "rating"),
         ),
-        state
+        state,
     )
 
     open class UriPartFilter(
         displayName: String,
         private val vals: Array<Pair<String, String>>,
-        state: Int = 0
+        state: Int = 0,
     ) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
-    }
-
-    open var CDN_URL: String? = null
-
-    companion object {
-        private var CDN_URL_ALT: List<String> = listOf()
-        private var CDN_PATH: String? = null
     }
 }
