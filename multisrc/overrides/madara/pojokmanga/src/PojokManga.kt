@@ -11,8 +11,6 @@ import java.util.Locale
 
 class PojokManga : Madara("Pojok Manga", "https://pojokmanga.net", "id", SimpleDateFormat("MMM dd, yyyy", Locale.US)) {
 
-    override val useLoadMoreSearch = false
-
     override val useNewChapterEndpoint = true
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -66,6 +64,7 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.net", "id", SimpleD
                         url = "$baseUrl/project/page/$page".toHttpUrlOrNull()!!.newBuilder()
                     }
                 }
+                else -> {}
             }
         }
         return GET(url.toString(), headers)
@@ -77,8 +76,8 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.net", "id", SimpleD
         "Filter Project",
         arrayOf(
             Pair("Show all manga", ""),
-            Pair("Show only project manga", "project-filter-on")
-        )
+            Pair("Show only project manga", "project-filter-on"),
+        ),
     )
 
     override fun getFilterList(): FilterList {
@@ -88,7 +87,7 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.net", "id", SimpleD
             Filter.Separator(),
             Filter.Header("NOTE: cant be used with other filter!"),
             Filter.Header("$name Project List page"),
-            ProjectFilter()
+            ProjectFilter(),
         )
 
         return FilterList(filters)

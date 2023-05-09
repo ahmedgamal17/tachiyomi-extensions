@@ -82,7 +82,7 @@ class Newbie : ConfigurableSource, HttpSource() {
         }
 
         val response = chain.proceed(chain.request())
-        val image = response.body?.byteString()?.toResponseBody("image/*".toMediaType())
+        val image = response.body.byteString().toResponseBody("image/*".toMediaType())
         return response.newBuilder().body(image).build()
     }
 
@@ -97,7 +97,7 @@ class Newbie : ConfigurableSource, HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$API_URL/projects/popular?scale=month&size=$count&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val page = json.decodeFromString<PageWrapperDto<LibraryDto>>(response.body!!.string())
+        val page = json.decodeFromString<PageWrapperDto<LibraryDto>>(response.body.string())
         val mangas = page.items.map {
             it.toSManga()
         }
@@ -119,7 +119,7 @@ class Newbie : ConfigurableSource, HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val page = json.decodeFromString<SearchWrapperDto<SubSearchDto<SearchLibraryDto>>>(response.body!!.string())
+        val page = json.decodeFromString<SearchWrapperDto<SubSearchDto<SearchLibraryDto>>>(response.body.string())
         val mangas = page.result.hits.map {
             it.toSearchManga()
         }
@@ -133,7 +133,9 @@ class Newbie : ConfigurableSource, HttpSource() {
             url = document.id
             thumbnail_url = if (document.image_large.isNotEmpty()) {
                 "$IMAGE_URL/${document.image_large}"
-            } else "$IMAGE_URL/${document.image_small}"
+            } else {
+                "$IMAGE_URL/${document.image_small}"
+            }
         }
     }
 
@@ -203,13 +205,14 @@ class Newbie : ConfigurableSource, HttpSource() {
                         requireChapters = false
                     }
                 }
+                else -> {}
             }
         }
 
         return POST(
             "https://neo.newmanga.org/catalogue",
             body = """{"query":"$query","sort":{"kind":"$orderBy","dir":"$ascEnd"},"filter":{"hidden_projects":[],"genres":{"excluded":$mutableExGenre,"included":$mutableGenre},"tags":{"excluded":$mutableExTag,"included":$mutableTag},"type":{"allowed":$mutableType},"translation_status":{"allowed":$mutableStatus},"released_year":{"min":null,"max":null},"require_chapters":$requireChapters,"original_status":{"allowed":$mutableTitleStatus},"adult":{"allowed":$mutableAge}},"pagination":{"page":$page,"size":$count}}""".toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()),
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -287,16 +290,17 @@ class Newbie : ConfigurableSource, HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val series = json.decodeFromString<MangaDetDto>(response.body!!.string())
-        branches[series.title.en] = series.branches
+        val series = json.decodeFromString<MangaDetDto>(response.body.string())
+        branches[series.id.toString()] = series.branches
         return series.toSManga()
     }
 
     @SuppressLint("DefaultLocale")
     private fun chapterName(book: BookDto): String {
         var chapterName = "${book.tom}. Глава ${DecimalFormat("#,###.##").format(book.number).replace(",", ".")}"
-        if (!book.is_available)
+        if (!book.is_available) {
             chapterName += " \uD83D\uDCB2 "
+        }
         if (book.name?.isNotBlank() == true) {
             chapterName += " ${book.name.capitalize()}"
         }
@@ -305,14 +309,14 @@ class Newbie : ConfigurableSource, HttpSource() {
 
     private fun mangaBranches(manga: SManga): List<BranchesDto> {
         val response = client.newCall(titleDetailsRequest(manga)).execute()
-        val series = json.decodeFromString<MangaDetDto>(response.body!!.string())
-        branches[series.title.en] = series.branches
+        val series = json.decodeFromString<MangaDetDto>(response.body.string())
+        branches[series.id.toString()] = series.branches
         return series.branches
     }
 
     private fun selector(b: BranchesDto): Boolean = b.is_default
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val branch = branches.getOrElse(manga.title) { mangaBranches(manga) }
+        val branch = branches.getOrElse(manga.url) { mangaBranches(manga) }
         return when {
             branch.isEmpty() -> {
                 return Observable.just(listOf())
@@ -334,7 +338,7 @@ class Newbie : ConfigurableSource, HttpSource() {
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException("chapterListParse(response: Response, manga: SManga)")
 
     private fun chapterListParse(response: Response, manga: SManga, branch: Long): List<SChapter> {
-        var chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body!!.string()).items
+        var chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body.string()).items
         if (!preferences.getBoolean(PAID_PREF, false)) {
             chapters = chapters.filter { it.is_available }
         }
@@ -352,7 +356,7 @@ class Newbie : ConfigurableSource, HttpSource() {
     private fun chapterListRequest(branch: Long): Request {
         return GET(
             "$API_URL/branches/$branch/chapters?reverse=true&size=1000000",
-            headers
+            headers,
         )
     }
 
@@ -361,8 +365,12 @@ class Newbie : ConfigurableSource, HttpSource() {
         return GET(API_URL + "/chapters/${chapter.url.substringAfterLast("/")}/pages", headers)
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url
+    }
+
     private fun pageListParse(response: Response, urlRequest: String): List<Page> {
-        val pages = json.decodeFromString<List<PageDto>>(response.body?.string()!!)
+        val pages = json.decodeFromString<List<PageDto>>(response.body.string())
         val result = mutableListOf<Page>()
         pages.forEach { page ->
             (1..page.slices!!).map { i ->
@@ -412,18 +420,18 @@ class Newbie : ConfigurableSource, HttpSource() {
         StatusList(getStatusList()),
         StatusTitleList(getStatusTitleList()),
         AgeList(getAgeList()),
-        RequireChapters()
+        RequireChapters(),
     )
 
     private class OrderBy : Filter.Sort(
         "Сортировка",
         arrayOf("По рейтингу", "По просмотрам", "По лайкам", "По кол-ву глав", "По дате создания", "По дате обновления"),
-        Selection(0, false)
+        Selection(0, false),
     )
 
     private class RequireChapters : Filter.Select<String>(
         "Только проекты с главами",
-        arrayOf("Да", "Все")
+        arrayOf("Да", "Все"),
     )
 
     private fun getTypeList() = listOf(
@@ -433,7 +441,7 @@ class Newbie : ConfigurableSource, HttpSource() {
         CheckFilter("Сингл", "SINGLE"),
         CheckFilter("OEL-манга", "OEL"),
         CheckFilter("Комикс", "COMICS"),
-        CheckFilter("Руманга", "RUSSIAN")
+        CheckFilter("Руманга", "RUSSIAN"),
     )
 
     private fun getStatusList() = listOf(
@@ -621,7 +629,7 @@ class Newbie : ConfigurableSource, HttpSource() {
     private fun getAgeList() = listOf(
         CheckFilter("13+", "ADULT_13"),
         CheckFilter("16+", "ADULT_16"),
-        CheckFilter("18+", "ADULT_18")
+        CheckFilter("18+", "ADULT_18"),
     )
 
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")

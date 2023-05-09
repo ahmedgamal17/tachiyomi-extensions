@@ -37,8 +37,6 @@ abstract class Manhwa18Cc(
     lang: String,
 ) : Madara(name, baseUrl, lang, SimpleDateFormat("dd MMM yyyy", Locale.US)) {
 
-    override val useLoadMoreSearch = false
-
     override val fetchGenres = false
 
     override fun popularMangaSelector() = "div.manga-item"
@@ -82,7 +80,7 @@ abstract class Manhwa18Cc(
                 document.location(),
                 element?.let {
                     it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
-                }
+                },
             )
         }
     }

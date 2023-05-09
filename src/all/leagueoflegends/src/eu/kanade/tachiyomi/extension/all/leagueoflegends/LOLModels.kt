@@ -5,48 +5,48 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class LOLHub(
-    private val sections: LOLSections
+    private val sections: LOLSections,
 ) : Iterable<LOLComic> by sections
 
 @Serializable
 data class LOLSections(
     val series: LOLData,
     @SerialName("one-shots")
-    private val oneShots: LOLData
+    private val oneShots: LOLData,
 ) : Iterable<LOLComic> {
     override fun iterator() = (series + oneShots).iterator()
 }
 
 @Serializable
 data class LOLData(
-    private val data: List<LOLComic>
+    private val data: List<LOLComic>,
 ) : Iterable<LOLComic> by data
 
 @Serializable
 data class LOLComic(
-    val title: String,
+    val title: String? = null,
     val subtitle: String? = null,
     val index: Float? = null,
-    private val url: String,
-    val description: String,
-    val background: LOLImage,
+    private val url: String? = null,
+    val description: String? = null,
+    val background: LOLImage? = null,
     @SerialName("featured-champions")
-    val champions: List<LOLChampion>? = null
+    val champions: List<LOLChampion>? = null,
 ) {
-    override fun toString() = url.substringAfter("/comic/")
+    override fun toString() = url?.substringAfter("/comic/") ?: error("Empty URL")
 }
 
 @Serializable
 data class LOLIssues(
-    private val issues: List<LOLComic>
-) : Iterable<LOLComic> by issues
+    private val issues: List<LOLComic>,
+) : Iterable<LOLComic> by issues.reversed()
 
 @Serializable
 data class LOLPages(
     @SerialName("staging-date")
     val date: String,
     @SerialName("desktop-pages")
-    private val pages: List<List<LOLImage>>
+    private val pages: List<List<LOLImage>>,
 ) : Iterable<LOLImage> {
     override fun iterator() = pages.flatten().iterator()
 }

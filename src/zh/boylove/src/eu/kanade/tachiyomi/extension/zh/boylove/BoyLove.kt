@@ -111,7 +111,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     private fun fetchPageList(chapterUrl: String): Observable<List<Page>> =
         client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
-            val root = response.asJsoup().selectFirst(Evaluator.Tag("section"))
+            val root = response.asJsoup().selectFirst(Evaluator.Tag("section"))!!
             val images = root.select(Evaluator.Class("reader-cartoon-image"))
             val urlList = if (images.isEmpty()) {
                 root.select(Evaluator.Tag("img")).map { it.attr("src").trim().toImageUrl() }
@@ -128,7 +128,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
 
     private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream<ResultDto<T>>(body!!.byteStream()).result
+        json.decodeFromStream<ResultDto<T>>(body.byteStream()).result
     }
 
     private var genres: Array<String> = emptyArray()

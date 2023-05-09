@@ -8,10 +8,9 @@ class Manhwa68 : Madara(
     "Manhwa68",
     "https://manhwa68.com",
     "en",
-    dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
+    dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
 ) {
 
     // The website does not flag the content.
-    override val useLoadMoreSearch = false
     override val filterNonMangaItems = false
 }

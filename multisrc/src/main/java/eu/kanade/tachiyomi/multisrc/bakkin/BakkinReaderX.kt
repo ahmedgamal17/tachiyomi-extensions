@@ -25,7 +25,7 @@ import uy.kohesive.injekt.api.get
 abstract class BakkinReaderX(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String
+    override val lang: String,
 ) : ConfigurableSource, HttpSource() {
     override val supportsLatest = false
 
@@ -49,7 +49,7 @@ abstract class BakkinReaderX(
             rx.Observable.just(block(seriesCache))!!
         } else {
             client.newCall(GET(mainUrl, headers)).asObservableSuccess().map {
-                seriesCache = json.parseToJsonElement(it.body!!.string())
+                seriesCache = json.parseToJsonElement(it.body.string())
                     .jsonObject.values.map(json::decodeFromJsonElement)
                 block(seriesCache)
             }!!
@@ -60,10 +60,6 @@ abstract class BakkinReaderX(
 
     override fun headersBuilder() =
         Headers.Builder().add("User-Agent", userAgent)
-
-    // Request the actual manga URL for the webview
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl#m=${manga.url}", headers)
 
     override fun fetchPopularManga(page: Int) =
         fetchSearchManga(page, "", FilterList())
@@ -115,6 +111,13 @@ abstract class BakkinReaderX(
                 .mapIndexed { idx, page -> Page(idx, "", baseUrl + page) }
         }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl#m=${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (m, v, c) = chapter.url.split('/')
+        return "$baseUrl#m=$m&v=$v&c=$c"
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = "quality"
@@ -137,6 +140,9 @@ abstract class BakkinReaderX(
         throw UnsupportedOperationException("Not used!")
 
     override fun latestUpdatesRequest(page: Int) =
+        throw UnsupportedOperationException("Not used!")
+
+    override fun mangaDetailsRequest(manga: SManga) =
         throw UnsupportedOperationException("Not used!")
 
     override fun searchMangaParse(response: Response) =

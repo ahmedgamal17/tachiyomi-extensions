@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangafox
 
+import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -8,12 +9,17 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.json.Json
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -30,8 +36,38 @@ class MangaFox : ParsedHttpSource() {
 
     override val supportsLatest: Boolean = true
 
+    private val json by injectLazy<Json>()
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 1)
+        // Force readway=2 cookie to get all page URLs at once
+        .cookieJar(
+            object : CookieJar {
+                private val cookieManager by lazy { CookieManager.getInstance() }
+
+                init {
+                    cookieManager.setCookie(mobileUrl.toHttpUrl().host, "readway=2")
+                    cookieManager.setCookie(baseUrl.toHttpUrl().host, "isAdult=1")
+                }
+
+                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                    val urlString = url.toString()
+                    cookies.forEach { cookieManager.setCookie(urlString, it.toString()) }
+                }
+
+                override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                    val cookies = cookieManager.getCookie(url.toString())
+
+                    return if (cookies != null && cookies.isNotEmpty()) {
+                        cookies.split(";").mapNotNull {
+                            Cookie.parse(url, it)
+                        }
+                    } else {
+                        emptyList()
+                    }
+                }
+            },
+        )
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
@@ -44,7 +80,7 @@ class MangaFox : ParsedHttpSource() {
     override fun popularMangaSelector(): String = "ul.manga-list-1-list li"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("a").first().let {
+        element.select("a").first()!!.let {
             setUrlWithoutDomain(it.attr("href"))
             title = it.attr("title")
             thumbnail_url = it.select("img").attr("abs:src")
@@ -108,7 +144,7 @@ class MangaFox : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        document.select(".detail-info-right").first().let {
+        document.select(".detail-info-right").first()!!.let {
             author = it.select(".detail-info-right-say a").joinToString(", ") { it.text() }
             genre = it.select(".detail-info-right-tag-list a").joinToString(", ") { it.text() }
             description = it.select("p.fullcontent").first()?.text()
@@ -142,7 +178,7 @@ class MangaFox : ParsedHttpSource() {
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
         } else {
-            kotlin.runCatching {
+            runCatching {
                 SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH).parse(date)?.time
             }.getOrNull() ?: 0L
         }
@@ -184,7 +220,7 @@ class MangaFox : ParsedHttpSource() {
         name: String,
         val query: String,
         private val vals: Array<Pair<String, String>>,
-        state: Int = 0
+        state: Int = 0,
     ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
@@ -211,7 +247,7 @@ class MangaFox : ParsedHttpSource() {
             Pair("American Manga", "5"),
             Pair("HongKong Manga", "6"),
             Pair("Other Manga", "7"),
-        )
+        ),
     )
 
     private class AuthorMethodFilter : TextSearchMethodFilter("Method", "author_method")
@@ -233,7 +269,7 @@ class MangaFox : ParsedHttpSource() {
             Pair("is", "eq"),
             Pair("less than", "lt"),
             Pair("more than", "gt"),
-        )
+        ),
     )
 
     private class RatingValueFilter : UriPartFilter(
@@ -247,7 +283,7 @@ class MangaFox : ParsedHttpSource() {
             Pair("3 stars", "3"),
             Pair("4 stars", "4"),
             Pair("5 stars", "5"),
-        )
+        ),
     )
 
     private class RatingFilter : Filter.Group<UriPartFilter>("Rating", listOf(RatingMethodFilter(), RatingValueFilter()))
@@ -259,7 +295,7 @@ class MangaFox : ParsedHttpSource() {
             Pair("on", "eq"),
             Pair("before", "lt"),
             Pair("after", "gt"),
-        )
+        ),
     )
 
     private class YearTextFilter : TextSearchFilter("Release year", "released")
@@ -273,7 +309,7 @@ class MangaFox : ParsedHttpSource() {
             Pair("Either", "0"),
             Pair("Yes", "2"),
             Pair("No", "1"),
-        )
+        ),
     )
 
     private class Genre(name: String, val id: Int) : Filter.TriState(name)
@@ -317,6 +353,6 @@ class MangaFox : ParsedHttpSource() {
         Genre("Yuri", 34),
         Genre("Mecha", 35),
         Genre("Lolicon", 36),
-        Genre("Shotacon", 37)
+        Genre("Shotacon", 37),
     )
 }

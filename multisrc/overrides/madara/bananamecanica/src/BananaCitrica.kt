@@ -9,9 +9,9 @@ import java.util.concurrent.TimeUnit
 
 class BananaCitrica : Madara(
     "Banana Cítrica",
-    "https://dinastiacilly.com",
+    "https://bananacitrica.com",
     "pt-BR",
-    SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR"))
+    SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
 
     // Website changed their name.

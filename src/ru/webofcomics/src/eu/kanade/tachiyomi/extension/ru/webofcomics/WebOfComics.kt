@@ -22,6 +22,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 class WebOfComics : ParsedHttpSource() {
 
@@ -33,8 +35,10 @@ class WebOfComics : ParsedHttpSource() {
 
     override val supportsLatest = true
 
+    private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
+
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.1185.50")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.$userAgentRandomizer Safari/537.36")
         .add("Referer", baseUrl)
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -52,7 +56,7 @@ class WebOfComics : ParsedHttpSource() {
                 .add("set_new_sort", "dle_sort_main")
                 .add("set_direction_sort", "dle_direction_main")
                 .build(),
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -65,7 +69,7 @@ class WebOfComics : ParsedHttpSource() {
                 .add("set_new_sort", "dle_sort_main")
                 .add("set_direction_sort", "dle_direction_main")
                 .build(),
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -79,7 +83,7 @@ class WebOfComics : ParsedHttpSource() {
                     .add("story", query)
                     .add("search_start", page.toString())
                     .build(),
-                headers = headers
+                headers = headers,
             )
         }
         val mutableGenre = mutableListOf<String>()
@@ -126,6 +130,7 @@ class WebOfComics : ParsedHttpSource() {
                                         publisherCat = getPublishersComics()[filter.state].id
                                     }
                                 }
+                                else -> {}
                             }
                         }
                     }
@@ -148,18 +153,22 @@ class WebOfComics : ParsedHttpSource() {
                                         publisherCat = getPublishersManga()[filter.state].id
                                     }
                                 }
+                                else -> {}
                             }
                         }
                     }
                 }
+                else -> {}
             }
         }
 
-        if (sectionOr == "Comics")
+        if (sectionOr == "Comics") {
             return GET("$baseUrl/f/age=${mutableAge.joinToString(",")}/comicsormanga=Comics/o.cat=$publisherCat/translatestatus=${mutableStatus.joinToString(",")}/genre=${mutableGenre.joinToString(",")}/type=${mutableType.joinToString(",")}/sort=$orderBy/order=$ascEnd/page/$page", headers)
+        }
 
-        if (sectionOr == "Manga")
+        if (sectionOr == "Manga") {
             return GET("$baseUrl/f/age=${mutableAge.joinToString(",")}/comicsormanga=Manga/o.cat=$publisherCat/translatestatus=${mutableStatus.joinToString(",")}/genremanga=${mutableGenre.joinToString(",")}/typemanga=${mutableType.joinToString(",")}/sort=$orderBy/order=$ascEnd/page/$page", headers)
+        }
 
         return POST(
             "$baseUrl/page/$page",
@@ -169,7 +178,7 @@ class WebOfComics : ParsedHttpSource() {
                 .add("set_new_sort", "dle_sort_main")
                 .add("set_direction_sort", "dle_direction_main")
                 .build(),
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -190,8 +199,8 @@ class WebOfComics : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = baseUrl + element.select(".lazyload").first().attr("data-src").replace("/thumbs", "")
-        element.select(".movie-title").first().let {
+        manga.thumbnail_url = baseUrl + element.select(".lazyload").first()!!.attr("data-src").replace("/thumbs", "")
+        element.select(".movie-title").first()!!.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.html().substringBefore("<div>")
         }
@@ -234,35 +243,39 @@ class WebOfComics : ParsedHttpSource() {
         }
 
         val manga = SManga.create()
-        val infoElement = document.select(".page-cols").first()
+        val infoElement = document.select(".page-cols").first()!!
         val infoElement2 = document.select(".m-info2 .sliceinfo1")
-        manga.title = infoElement.select("h1").first().text()
-        manga.thumbnail_url = baseUrl + infoElement.select(".lazyload").first().attr("data-src")
-        manga.description = infoElement.select("H2").first().text() + "\n" + ratingStar + " " + ratingValue + " (голосов: " + ratingVotes + ")\n" + Jsoup.parse(document.select(".slice-this").first().html().replace("<br>", "REPLACbR")).text().replace("REPLACbR", "\n").substringAfter("Описание:").trim()
+        manga.title = infoElement.select("h1").first()!!.text()
+        manga.thumbnail_url = baseUrl + infoElement.select(".lazyload").first()!!.attr("data-src")
+        manga.description = infoElement.select("H2").first()!!.text() + "\n" + ratingStar + " " + ratingValue + " (голосов: " + ratingVotes + ")\n" + Jsoup.parse(document.select(".slice-this").first()!!.html().replace("<br>", "REPLACbR")).text().replace("REPLACbR", "\n").substringAfter("Описание:").trim()
         manga.author = infoElement2.select(":contains(Автор) a").joinToString { it.text() }
-        if (manga.author.isNullOrEmpty())
-            manga.author = infoElement.select(".mi-item:contains(Издательство)").first().text()
+        if (manga.author.isNullOrEmpty()) {
+            manga.author = infoElement.select(".mi-item:contains(Издательство)").first()!!.text()
+        }
         manga.artist = infoElement2.select(":contains(Художник) a").joinToString { it.text() }
         manga.genre = (infoElement.select(".mi-item:contains(Тип) a") + infoElement.select(".mi-item:contains(Возраст) a") + infoElement.select(".mi-item:contains(Формат) a") + infoElement.select(".mi-item:contains(Жанр) a")).joinToString { it.text() }
-        manga.status = if (document.toString().contains("Удалено по просьбе правообладателя"))
+        manga.status = if (document.toString().contains("Удалено по просьбе правообладателя")) {
             SManga.LICENSED
-        else
-            parseStatus(infoElement.select(".mi-item:contains(Перевод) a").first().text())
+        } else {
+            parseStatus(infoElement.select(".mi-item:contains(Перевод) a").first()!!.text())
+        }
 
         return manga
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val TypeSeries = if (manga.url.contains("/manga/"))
+        val typeSeries = if (manga.url.contains("/manga/")) {
             "xsort='tommanga,glavamanga' template='custom-linkstocomics-xfmanga-guest'"
-        else "xsort='number' template='custom-linkstocomics-xfcomics-guest'"
+        } else {
+            "xsort='number' template='custom-linkstocomics-xfcomics-guest'"
+        }
 
         return POST(
-            baseUrl + "/engine/ajax/customajax.php",
+            "$baseUrl/engine/ajax/customajax.php",
             body = FormBody.Builder()
-                .add("castom", "custom senxf='fastnavigation|${manga.url.substringAfterLast("/").substringBefore("-")}' $TypeSeries limit='3000' sort='asc' cache='yes'")
+                .add("castom", "custom senxf='fastnavigation|${manga.url.substringAfterLast("/").substringBefore("-")}' $typeSeries limit='3000' sort='asc' cache='yes'")
                 .build(),
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -270,16 +283,17 @@ class WebOfComics : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        element.select("a").first().let {
+        element.select("a").first()!!.let {
             val numberSection = it.text().substringBefore(" - ")
             chapter.name = it.text().substringAfterLast(":")
-            chapter.chapter_number = if (numberSection.contains("#"))
+            chapter.chapter_number = if (numberSection.contains("#")) {
                 numberSection.substringAfter("#").replace("-", ".").toFloatOrNull() ?: -1f
-            else
+            } else {
                 numberSection.substringAfter("Глава").substringAfter("-").toFloatOrNull() ?: -1f
+            }
             chapter.setUrlWithoutDomain(it.attr("href"))
         }
-        chapter.date_upload = simpleDateFormat.parse(element.select("div").first().text().trim())?.time ?: 0L
+        chapter.date_upload = simpleDateFormat.parse(element.select("div").first()!!.text().trim())?.time ?: 0L
         return chapter
     }
 
@@ -288,9 +302,18 @@ class WebOfComics : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        var baseImgUrl = document.select("link[rel='image_src']").last().attr("href")
+        var baseImgUrl = document.select("link[rel='image_src']").last()!!.attr("href")
 
-        val publicUrl = "/public_html"
+        if (baseImgUrl.isEmpty()) {
+            return document.select(".readtab .lazyload").mapIndexed { index, element ->
+                Page(
+                    index,
+                    "",
+                    "https://read.webofcomics.ru/webofcomics.ru/www/webofcomics.ru/public_html/uploads/" + element.attr("data-src").substringAfter("/uploads/"),
+                )
+            }
+        }
+
         val uploadUrl =
             with(baseImgUrl) {
                 when {
@@ -300,19 +323,15 @@ class WebOfComics : ParsedHttpSource() {
                     else -> "errorUploads"
                 }
             }
+
         baseImgUrl = baseImgUrl.substringBefore(uploadUrl)
-        if (baseImgUrl.contains(publicUrl))
-            baseImgUrl =
-                baseImgUrl.substringBefore(publicUrl) + "/www/" +
-                baseUrl.substringAfter("://") + publicUrl +
-                baseImgUrl.substringAfter(publicUrl)
 
         if (document.select(".readtab .lazyload").isNotEmpty()) {
             return document.select(".readtab .lazyload").mapIndexed { index, element ->
                 Page(
                     index,
                     "",
-                    baseImgUrl + uploadUrl + element.attr("data-src").substringAfter(uploadUrl)
+                    baseImgUrl + uploadUrl + element.attr("data-src").substringAfter(uploadUrl),
                 )
             }
         } else {
@@ -327,10 +346,11 @@ class WebOfComics : ParsedHttpSource() {
                 .substringBefore("; i++)")
                 .trim()
 
-            if (endPageStr.contains("="))
+            if (endPageStr.contains("=")) {
                 endPageStr = (endPageStr.replace("=", "").trim().toInt() + 1).toString()
+            }
 
-            if (baseImgUrl.contains("/share."))
+            if (baseImgUrl.contains("/share.")) {
                 baseImgUrl = counterPageStr
                     .substringAfter("data-src=\"")
                     .substringBefore("' + i")
@@ -339,6 +359,7 @@ class WebOfComics : ParsedHttpSource() {
                         .substringAfter("i + '")
                         .substringBefore("\">")
                         .trim()
+            }
 
             val countSubPage = counterPageStr.split("document.write").size
             return (startPageStr.toInt() until endPageStr.toInt()).mapIndexed { index, page ->
@@ -361,7 +382,7 @@ class WebOfComics : ParsedHttpSource() {
                 Page(
                     index,
                     "",
-                    baseImgUrl.substringBeforeLast("/") + "/$subPage$page." + baseImgUrl.substringAfterLast(".")
+                    baseImgUrl.substringBeforeLast("/") + "/$subPage$page." + baseImgUrl.substringAfterLast("."),
                 )
             }
         }
@@ -398,12 +419,12 @@ class WebOfComics : ParsedHttpSource() {
     private class OrderBy : Filter.Sort(
         "Сортировать по",
         arrayOf("Дате обновления", "Популярности", "Просмотрам", "Комментариям", "Алфавиту", "Дате выпуска♼", "Рейтингу♼"),
-        Selection(1, false)
+        Selection(1, false),
     )
 
     private class Section : Filter.Select<String>(
         "ИЛИ",
-        arrayOf("Сортировка(без фильтрации♼)", "КОМИКСЫ", "МАНГА")
+        arrayOf("Сортировка(без фильтрации♼)", "КОМИКСЫ", "МАНГА"),
     )
 
     private class StatusList(statuses: List<CheckFilter>) : Filter.Group<CheckFilter>("Статус перевода", statuses)

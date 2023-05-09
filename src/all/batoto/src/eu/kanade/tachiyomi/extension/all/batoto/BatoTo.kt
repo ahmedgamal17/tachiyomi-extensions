@@ -46,7 +46,7 @@ import java.util.concurrent.TimeUnit
 
 open class BatoTo(
     final override val lang: String,
-    private val siteLang: String
+    private val siteLang: String,
 ) : ConfigurableSource, ParsedHttpSource() {
 
     private val preferences: SharedPreferences by lazy {
@@ -200,7 +200,8 @@ open class BatoTo(
                         is GenreGroupFilter -> {
                             with(filter) {
                                 url.addQueryParameter(
-                                    "genres", included.joinToString(",") + "|" + excluded.joinToString(",")
+                                    "genres",
+                                    included.joinToString(",") + "|" + excluded.joinToString(","),
                                 )
                             }
                         }
@@ -266,7 +267,7 @@ open class BatoTo(
     }
 
     private fun queryHistoryParse(response: Response): MangasPage {
-        val json = json.decodeFromString<JsonObject>(response.body!!.string())
+        val json = json.decodeFromString<JsonObject>(response.body.string())
         val html = json.jsonObject["html"]!!.jsonPrimitive.content
 
         val document = Jsoup.parse(html, response.request.url.toString())
@@ -344,8 +345,8 @@ open class BatoTo(
                 when {
                     manga.url.startsWith("http") -> manga.url
                     else -> "$baseUrl${manga.url}"
-                }
-            )
+                },
+            ),
         ).execute().asJsoup()
         if (getAltChapterListPref() || checkChapterLists(url)) {
             val id = manga.url.substringBeforeLast("/").substringAfterLast("/").trim()
@@ -357,12 +358,12 @@ open class BatoTo(
     }
 
     private fun altChapterParse(response: Response, title: String): List<SChapter> {
-        return Jsoup.parse(response.body!!.string(), response.request.url.toString(), Parser.xmlParser())
+        return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
             .select("channel > item").map { item ->
                 SChapter.create().apply {
-                    url = item.selectFirst("guid").text()
-                    name = item.selectFirst("title").text().substringAfter(title).trim()
-                    date_upload = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US).parse(item.selectFirst("pubDate").text())?.time ?: 0L
+                    url = item.selectFirst("guid")!!.text()
+                    name = item.selectFirst("title")!!.text().substringAfter(title).trim()
+                    date_upload = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US).parse(item.selectFirst("pubDate")!!.text())?.time ?: 0L
                 }
             }
     }
@@ -697,7 +698,7 @@ open class BatoTo(
         TriStateFilterOption("manhwa", "Manhwa"),
         TriStateFilterOption("webtoon", "Webtoon"),
         TriStateFilterOption("western", "Western"),
-        
+
         TriStateFilterOption("shoujo", "Shoujo(G)"),
         TriStateFilterOption("shounen", "Shounen(B)"),
         TriStateFilterOption("josei", "Josei(W)"),
@@ -706,7 +707,7 @@ open class BatoTo(
         TriStateFilterOption("yaoi", "Yaoi(BL)"),
         TriStateFilterOption("futa", "Futa(WL)"),
         TriStateFilterOption("bara", "Bara(ML)"),
-        
+
         TriStateFilterOption("gore", "Gore"),
         TriStateFilterOption("bloody", "Bloody"),
         TriStateFilterOption("violence", "Violence"),
@@ -715,7 +716,7 @@ open class BatoTo(
         TriStateFilterOption("mature", "Mature"),
         TriStateFilterOption("smut", "Smut"),
         TriStateFilterOption("hentai", "Hentai"),
-        
+
         TriStateFilterOption("_4_koma", "4-Koma"),
         TriStateFilterOption("action", "Action"),
         TriStateFilterOption("adaptation", "Adaptation"),
@@ -819,7 +820,7 @@ open class BatoTo(
         TriStateFilterOption("lolicon", "lolicon"),
         TriStateFilterOption("award_winning", "Award Winning"),
         TriStateFilterOption("youkai", "Youkai"),
-        TriStateFilterOption("uncategorized", "Uncategorized")
+        TriStateFilterOption("uncategorized", "Uncategorized"),
     )
 
     private fun getLangFilter() = listOf(
@@ -949,7 +950,7 @@ open class BatoTo(
             "dto.to",
             "hto.to",
             "mto.to",
-            "wto.to"
+            "wto.to",
         )
         private val MIRROR_PREF_ENTRY_VALUES = arrayOf(
             "https://bato.to",
@@ -965,7 +966,7 @@ open class BatoTo(
             "https://dto.to",
             "https://hto.to",
             "https://mto.to",
-            "https://wto.to"
+            "https://wto.to",
         )
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 

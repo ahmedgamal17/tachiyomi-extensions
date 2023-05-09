@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 abstract class Zbulu(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String
+    override val lang: String,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -53,7 +53,7 @@ abstract class Zbulu(
                 setUrlWithoutDomain(it.attr("href").addTrailingSlash())
                 title = it.text()
             }
-            thumbnail_url = element.select("img").first().attr("abs:src")
+            thumbnail_url = element.select("img").first()!!.attr("abs:src")
         }
     }
 
@@ -100,10 +100,10 @@ abstract class Zbulu(
     // Manga summary page
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div.single-comic").first()
+        val infoElement = document.select("div.single-comic").first()!!
 
         return SManga.create().apply {
-            title = infoElement.select("h1").first().text()
+            title = infoElement.select("h1").first()!!.text()
             author = infoElement.select("div.author a").text()
             status = parseStatus(infoElement.select("div.update span[style]").text())
             genre = infoElement.select("div.genre a").joinToString { it.text() }
@@ -141,7 +141,7 @@ abstract class Zbulu(
         return SChapter.create().apply {
             setUrlWithoutDomain(element.select("a").attr("href"))
             name = element.select("h2").text()
-            date_upload = element.select("div.chapter-date")?.text().toDate()
+            date_upload = element.select("div.chapter-date").text().toDate()
         }
     }
 
@@ -204,7 +204,7 @@ abstract class Zbulu(
         Filter.Header("Author name must be exact."),
         Filter.Separator(),
         AuthorFilter(),
-        GenreFilter()
+        GenreFilter(),
     )
 
     // [...document.querySelectorAll('.sub-menu li a')].map(a => `Pair("${a.textContent}", "${a.getAttribute('href')}")`).join(',\n')
@@ -259,8 +259,8 @@ abstract class Zbulu(
             Pair("Supernatural", "supernatural"),
             Pair("Tragedy", "tragedy"),
             Pair("Trap", "trap"),
-            Pair("Webtoons", "webtoons")
-        )
+            Pair("Webtoons", "webtoons"),
+        ),
     )
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :

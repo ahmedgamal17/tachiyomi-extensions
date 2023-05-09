@@ -34,13 +34,13 @@ open class FlameScans(
     override val baseUrl: String,
     override val lang: String,
     mangaUrlDirectory: String,
-    dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+    dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
 ) : MangaThemesia(
     "Flame Scans",
     baseUrl,
     lang,
     mangaUrlDirectory = mangaUrlDirectory,
-    dateFormat = dateFormat
+    dateFormat = dateFormat,
 ),
     ConfigurableSource {
 
@@ -66,7 +66,7 @@ open class FlameScans(
             return super.pageListParse(document)
         }
 
-        return document.select("#readerarea p:has(img), $composedSelector")
+        return document.select("#readerarea p:has(img), $composedSelector").toList()
             .filter {
                 it.select("img").all { imgEl ->
                     imgEl.attr("abs:src").isNullOrEmpty().not()
@@ -100,7 +100,7 @@ open class FlameScans(
             val request = chain.request().newBuilder().url(imageUrl).build()
             val response = chain.proceed(request)
 
-            val bitmap = BitmapFactory.decodeStream(response.body!!.byteStream())
+            val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
 
             width += bitmap.width
             height = bitmap.height
@@ -154,7 +154,7 @@ open class FlameScans(
         return this.map { mangasPage ->
             MangasPage(
                 mangasPage.mangas.map { it.tempUrlToPermIfNeeded() },
-                mangasPage.hasNextPage
+                mangasPage.hasNextPage,
             )
         }
     }

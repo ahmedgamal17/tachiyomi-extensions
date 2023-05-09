@@ -12,6 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -42,9 +43,28 @@ class MangaXY : ParsedHttpSource() {
             .addQueryParameter("view", "thumb")
             .addQueryParameter("page", page.toString())
             .toString(),
-        headers
+        headers,
     )
+
     override fun popularMangaSelector() = ".container > .row > div.col-12.col-lg-9 > #tblChap > .thumb"
+
+    override fun popularMangaNextPageSelector(): String = "div#tblChap p.page a:contains(Cuối)"
+
+    override fun popularMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        element.select("a.name").first()!!.let {
+            manga.setUrlWithoutDomain(it.attr("href"))
+            manga.title = it.text().trim()
+        }
+        manga.thumbnail_url = element.select(".item img")
+            .first()!!
+            .attr("style")
+            .substringAfter("url('")
+            .substringBefore("')")
+            .replace("//", "https:")
+            .replace("http:", "")
+        return manga
+    }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -55,35 +75,22 @@ class MangaXY : ParsedHttpSource() {
             .addQueryParameter("view", "thumb")
             .addQueryParameter("page", page.toString())
             .toString(),
-        headers
+        headers,
     )
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        element.select("a.name").first().let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text().trim()
-        }
-        manga.thumbnail_url = element.select(".item img")
-            .first()
-            .attr("style")
-            .substringAfter("url('")
-            .substringBefore("')")
-            .replace("//", "https:")
-            .replace("http:", "")
-        return manga
-    }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector(): String = "div#tblChap p.page a:contains(Cuối)"
-
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) :
+    open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+        state: Int = 0,
+    ) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
+
     private class SortByFilter : UriPartFilter(
         "Sắp xếp theo",
         arrayOf(
@@ -93,15 +100,17 @@ class MangaXY : ParsedHttpSource() {
             Pair("Theo ABC", "ten"),
             Pair("Số Chương", "sochap"),
         ),
-        2
+        2,
     )
+
     private class SearchTypeFilter : UriPartFilter(
         "Kiểu tìm",
         arrayOf(
             Pair("AND/và", "and"),
             Pair("OR/hoặc", "or"),
-        )
+        ),
     )
+
     private class ForFilter : UriPartFilter(
         "Dành cho",
         arrayOf(
@@ -109,8 +118,9 @@ class MangaXY : ParsedHttpSource() {
             Pair("Con gái", "gai"),
             Pair("Con trai", "trai"),
             Pair("Con nít", "nit"),
-        )
+        ),
     )
+
     private class AgeFilter : UriPartFilter(
         "Bất kỳ",
         arrayOf(
@@ -121,8 +131,9 @@ class MangaXY : ParsedHttpSource() {
             Pair("= 16", "16"),
             Pair("= 17", "17"),
             Pair("= 18", "18"),
-        )
+        ),
     )
+
     private class StatusFilter : UriPartFilter(
         "Tình trạng",
         arrayOf(
@@ -130,8 +141,9 @@ class MangaXY : ParsedHttpSource() {
             Pair("Đang dịch", "Ongoing"),
             Pair("Hoàn thành", "Complete"),
             Pair("Tạm ngưng", "Drop"),
-        )
+        ),
     )
+
     private class OriginFilter : UriPartFilter(
         "Quốc gia",
         arrayOf(
@@ -140,8 +152,9 @@ class MangaXY : ParsedHttpSource() {
             Pair("Trung Quốc", "trung"),
             Pair("Hàn Quốc", "han"),
             Pair("Việt Nam", "vietnam"),
-        )
+        ),
     )
+
     private class ReadingModeFilter : UriPartFilter(
         "Kiểu đọc",
         arrayOf(
@@ -149,8 +162,9 @@ class MangaXY : ParsedHttpSource() {
             Pair("Chưa xác định", "chưa xác định"),
             Pair("Phải qua trái", "xem từ phải qua trái"),
             Pair("Trái qua phải", "xem từ trái qua phải"),
-        )
+        ),
     )
+
     private class YearFilter : Filter.Text("Năm phát hành")
     private class UserFilter : Filter.Text("Đăng bởi thành viên")
     private class AuthorFilter : Filter.Text("Tên tác giả")
@@ -202,20 +216,20 @@ class MangaXY : ParsedHttpSource() {
                             "baogom",
                             filter.state
                                 .filter { it.state == Filter.TriState.STATE_INCLUDE }
-                                .joinToString(",") { it.id }
+                                .joinToString(",") { it.id },
                         )
                         addQueryParameter(
                             "khonggom",
                             filter.state
                                 .filter { it.state == Filter.TriState.STATE_EXCLUDE }
-                                .joinToString(",") { it.id }
+                                .joinToString(",") { it.id },
                         )
                     }
                     else -> {}
                 }
             }
         }.build().toString(),
-        headers
+        headers,
     )
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -227,33 +241,63 @@ class MangaXY : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoElement = document.selectFirst(".tab-content")
-        val infoTop = document.selectFirst(".detail-top-wrap")
+        val infoElement = document.selectFirst(".tab-content")!!
+        val infoTop = document.selectFirst(".detail-top-wrap")!!
+        val statusString0 = infoElement.select("div.manga-info > ul > li:nth-child(3) > a").firstOrNull()?.text()
+        val statusString1 = infoElement.select("div.manga-info > ul > li:nth-child(4) > a").firstOrNull()?.text()
+        val statusString2 = infoElement.select("div.manga-info > ul > li:nth-child(5) > a").firstOrNull()?.text()
         title = infoTop.select("h1.comics-title").text()
         author = infoTop.select(".created-by").joinToString { it.text() }
-        genre = infoTop.select(".top-comics-type a")
+        genre = infoTop.select(".top-comics-type a").toList()
             .filter { it.text().isNotEmpty() }
             .joinToString(", ") { it.text() }
-        description = infoElement.select(".manga-info p").text()
+        description = infoElement.select(".manga-info p").textWithLinebreaks()
         thumbnail_url = infoTop.select(".detail-top-right img")
-            .first()
+            .first()!!
             .attr("style")
             .substringAfter("url('")
             .substringBefore("')")
             .replace("//", "https:")
             .replace("http:", "")
-        status = when (infoElement.select(".manga-info ul li a").first().text().trim()) {
-            "Đang tiến hành" -> SManga.ONGOING
-            "Đã Hoàn Thành" -> SManga.COMPLETED
-            "Tạm ngưng" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
+        if (statusString0 == "Tạm ngưng" || statusString0 == "Đã Hoàn Thành" || statusString0 == "Đang tiến hành") {
+            status = when (statusString0) {
+                "Đang tiến hành" -> SManga.ONGOING
+                "Đã Hoàn Thành" -> SManga.COMPLETED
+                "Tạm ngưng" -> SManga.ON_HIATUS
+                null -> SManga.UNKNOWN
+                else -> SManga.UNKNOWN
+            }
         }
+        if (statusString1 == "Tạm ngưng" || statusString1 == "Đã Hoàn Thành" || statusString1 == "Đang tiến hành") {
+            status = when (statusString1) {
+                "Đang tiến hành" -> SManga.ONGOING
+                "Đã Hoàn Thành" -> SManga.COMPLETED
+                "Tạm ngưng" -> SManga.ON_HIATUS
+                null -> SManga.UNKNOWN
+                else -> SManga.UNKNOWN
+            }
+        }
+        if (statusString2 == "Tạm ngưng" || statusString2 == "Đã Hoàn Thành" || statusString2 == "Đang tiến hành") {
+            status = when (statusString2) {
+                "Đang tiến hành" -> SManga.ONGOING
+                "Đã Hoàn Thành" -> SManga.COMPLETED
+                "Tạm ngưng" -> SManga.ON_HIATUS
+                null -> SManga.UNKNOWN
+                else -> SManga.UNKNOWN
+            }
+        }
+    }
+
+    private fun Elements.textWithLinebreaks(): String {
+        this.select("p").prepend("\\n")
+        this.select("br").prepend("\\n")
+        return this.text().replace("\\n", "\n").replace("\n ", "\n")
     }
 
     override fun chapterListSelector() = "#ChapList > .episode-item"
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.select(".episode-item").first().attr("abs:href"))
-        name = element.select(".episode-title").first().text()
+        setUrlWithoutDomain(element.select(".episode-item").first()!!.attr("abs:href"))
+        name = element.select(".episode-title").first()!!.text()
         date_upload = runCatching {
             dateFormat.parse(element.select("div.episode-date > time").attr("datetime"))?.time
         }.getOrNull() ?: 0L
@@ -269,6 +313,7 @@ class MangaXY : ParsedHttpSource() {
 
     open class Genre(name: String, val id: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
+
     override fun getFilterList() = FilterList(
         GenreList(getGenreList()),
         SortByFilter(),
@@ -337,6 +382,6 @@ class MangaXY : ParsedHttpSource() {
         Genre("Supernatural", "102"),
         Genre("Tragedy", "104"),
         Genre("Yaoi", "114"),
-        Genre("Yuri", "111")
+        Genre("Yuri", "111"),
     )
 }

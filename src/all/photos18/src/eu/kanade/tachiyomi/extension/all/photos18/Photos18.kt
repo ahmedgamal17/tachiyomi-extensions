@@ -45,14 +45,14 @@ class Photos18 : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         parseCategories(document)
-        val mangas = document.selectFirst(Evaluator.Id("videos")).children().map {
-            val cardBody = it.selectFirst(Evaluator.Class("card-body"))
-            val link = cardBody.selectFirst(Evaluator.Tag("a"))
+        val mangas = document.selectFirst(Evaluator.Id("videos"))!!.children().map {
+            val cardBody = it.selectFirst(Evaluator.Class("card-body"))!!
+            val link = cardBody.selectFirst(Evaluator.Tag("a"))!!
             SManga.create().apply {
                 url = link.attr("href").stripLang()
                 title = link.ownText()
-                thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img")).attr("data-src")
-                genre = cardBody.selectFirst(Evaluator.Tag("label")).ownText()
+                thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
+                genre = cardBody.selectFirst(Evaluator.Tag("label"))!!.ownText()
                 status = SManga.COMPLETED
                 initialized = true
             }
@@ -98,7 +98,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val images = document.selectFirst(Evaluator.Id("content")).select(Evaluator.Tag("img"))
+        val images = document.selectFirst(Evaluator.Id("content"))!!.select(Evaluator.Tag("img"))
         return images.mapIndexed { index, image ->
             Page(index, imageUrl = image.attr("data-src"))
         }
@@ -108,10 +108,11 @@ class Photos18 : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = FilterList(
         SortFilter(),
-        if (categories.isEmpty())
+        if (categories.isEmpty()) {
             Filter.Header("Tap 'Reset' to load categories")
-        else
+        } else {
             CategoryFilter(categories)
+        },
     )
 
     private open class QueryFilter(
@@ -119,7 +120,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
         values: Array<String>,
         private val queryName: String,
         private val queryValues: Array<String>,
-        state: Int = 0
+        state: Int = 0,
     ) : Filter.Select<String>(name, values, state) {
         fun addQueryTo(builder: HttpUrl.Builder) =
             builder.addQueryParameter(queryName, queryValues[state])
@@ -130,26 +131,26 @@ class Photos18 : HttpSource(), ConfigurableSource {
         arrayOf("Latest", "Popular", "Trend", "Recommended", "Best"),
         "sort",
         arrayOf("created", "hits", "views", "score", "likes"),
-        state = 2
+        state = 2,
     )
 
     private class CategoryFilter(categories: List<Pair<String, String>>) : QueryFilter(
         "Category",
         categories.map { it.first }.toTypedArray(),
         "category_id",
-        categories.map { it.second }.toTypedArray()
+        categories.map { it.second }.toTypedArray(),
     )
 
     private var categories: List<Pair<String, String>> = emptyList()
 
     private fun parseCategories(document: Document) {
         if (categories.isNotEmpty()) return
-        val items = document.selectFirst(Evaluator.Id("w3")).children()
+        val items = document.selectFirst(Evaluator.Id("w3"))!!.children()
         categories = buildList(items.size + 1) {
             add(Pair("All", ""))
             items.mapTo(this) {
                 val value = it.text().substringBefore(" (")
-                val queryValue = it.selectFirst(Evaluator.Tag("a")).attr("href").substringAfterLast('/')
+                val queryValue = it.selectFirst(Evaluator.Tag("a"))!!.attr("href").substringAfterLast('/')
                 Pair(value, queryValue)
             }
         }

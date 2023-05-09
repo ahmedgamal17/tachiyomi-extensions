@@ -70,13 +70,13 @@ class SoushiyoFamiliar : ParsedHttpSource() {
         /* Unreleased entries don't have a symbol and date */
         if (dateSymbolElements.size != 0) {
             /* Get the text after the symbol (if there are more occurrences then take the last, so the latest date is used in the app) */
-            textDate = dateSymbolElements.last().nextSibling().toString()
+            textDate = dateSymbolElements.last()!!.nextSibling().toString()
             /* Filter out any characters that do not belong to the valid date format "M/d/yy" */
             textDate = textDate.replace("[^0-9/]".toRegex(), "")
         }
 
         val chapter = SChapter.create()
-        chapter.url = element.select(".column-3 > a").attr("href").substringAfter(baseUrl) /* This is empty if there is no link (e.g. for unreleased chapters) --> This is then handled in chapterListParse */
+        chapter.url = element.select(".column-3 > a").attr("href").substringAfter(baseUrl) // This is empty if there is no link (e.g. for unreleased chapters) --> This is then handled in chapterListParse
         chapter.name = "Act $textAct - Chapter $textChapNum: $textChapName"
         chapter.date_upload = parseDate(textDate)
 
@@ -100,7 +100,7 @@ class SoushiyoFamiliar : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used.")
 
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException("Not used.")
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException("Not used.")
 
@@ -108,7 +108,7 @@ class SoushiyoFamiliar : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used.")
 
-    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException("Not used.")
+    override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException("Not used.")
 
     override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used.")
 

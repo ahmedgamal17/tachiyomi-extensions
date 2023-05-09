@@ -10,13 +10,13 @@ import java.text.SimpleDateFormat
 @Serializable
 data class HeanCmsQuerySearchDto(
     val data: List<HeanCmsSeriesDto> = emptyList(),
-    val meta: HeanCmsQuerySearchMetaDto? = null
+    val meta: HeanCmsQuerySearchMetaDto? = null,
 )
 
 @Serializable
 data class HeanCmsQuerySearchMetaDto(
     @SerialName("current_page") val currentPage: Int,
-    @SerialName("last_page") val lastPage: Int
+    @SerialName("last_page") val lastPage: Int,
 ) {
 
     val hasNextPage: Boolean
@@ -28,22 +28,21 @@ data class HeanCmsSearchDto(
     val description: String? = null,
     @SerialName("series_slug") val slug: String,
     @SerialName("series_type") val type: String,
-    val title: String
+    val title: String,
+    val thumbnail: String? = null,
 ) {
 
     fun toSManga(
         apiUrl: String,
         coverPath: String,
-        slugMap: Map<String, HeanCms.HeanCmsTitle>
+        slugMap: Map<String, HeanCms.HeanCmsTitle>,
     ): SManga = SManga.create().apply {
         val slugOnly = slug.replace(HeanCms.TIMESTAMP_REGEX, "")
-        val thumbnailFileName = slugMap[slugOnly]?.thumbnailFileName.orEmpty()
+        val thumbnailFileName = slugMap[slugOnly]?.thumbnailFileName
 
         title = this@HeanCmsSearchDto.title
-        thumbnail_url = when {
-            thumbnailFileName.isNotEmpty() -> "$apiUrl/$coverPath$thumbnailFileName"
-            else -> ""
-        }
+        thumbnail_url = thumbnail?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
+            ?: thumbnailFileName?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
         url = "/series/$slugOnly"
     }
 }
@@ -60,7 +59,7 @@ data class HeanCmsSeriesDto(
     val thumbnail: String,
     val title: String,
     val tags: List<HeanCmsTagDto>? = emptyList(),
-    val chapters: List<HeanCmsChapterDto>? = emptyList()
+    val chapters: List<HeanCmsChapterDto>? = emptyList(),
 ) {
 
     fun toSManga(apiUrl: String, coverPath: String): SManga = SManga.create().apply {
@@ -75,7 +74,8 @@ data class HeanCmsSeriesDto(
         genre = tags.orEmpty()
             .sortedBy(HeanCmsTagDto::name)
             .joinToString { it.name }
-        thumbnail_url = "$apiUrl/$coverPath$thumbnail"
+        thumbnail_url = thumbnail.ifEmpty { null }
+            ?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
         status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
         url = "/series/${slug.replace(HeanCms.TIMESTAMP_REGEX, "")}"
     }
@@ -103,12 +103,12 @@ data class HeanCmsChapterDto(
 
 @Serializable
 data class HeanCmsReaderDto(
-    val content: HeanCmsReaderContentDto? = null
+    val content: HeanCmsReaderContentDto? = null,
 )
 
 @Serializable
 data class HeanCmsReaderContentDto(
-    val images: List<String>? = emptyList()
+    val images: List<String>? = emptyList(),
 )
 
 @Serializable
@@ -116,13 +116,17 @@ data class HeanCmsQuerySearchPayloadDto(
     val order: String,
     val page: Int,
     @SerialName("order_by") val orderBy: String,
-    @SerialName("series_status") val status: String,
+    @SerialName("series_status") val status: String? = null,
     @SerialName("series_type") val type: String,
-    @SerialName("tags_ids") val tagIds: List<Int> = emptyList()
+    @SerialName("tags_ids") val tagIds: List<Int> = emptyList(),
 )
 
 @Serializable
 data class HeanCmsSearchPayloadDto(val term: String)
+
+private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
+    return if (startsWith("https://")) this else "$apiUrl/$coverPath$this"
+}
 
 fun String.toStatus(): Int = when (this) {
     "Ongoing" -> SManga.ONGOING

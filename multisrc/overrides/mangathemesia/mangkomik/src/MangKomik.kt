@@ -10,18 +10,18 @@ class MangKomik : MangaThemesia("MangKomik", "https://mangkomik.net", "id") {
 
     override fun pageListParse(document: Document): List<Page> {
         // Get external JS for image urls
-        val scriptEl = document.selectFirst("script[data-minify]")
+        val scriptEl = document.selectFirst("script[data-minify]")!!
         val scriptUrl = scriptEl?.attr("src")
         if (scriptUrl.isNullOrEmpty()) {
             return super.pageListParse(document)
         }
 
         val scriptResponse = client.newCall(
-            GET(scriptUrl, headers)
+            GET(scriptUrl, headers),
         ).execute()
 
         // Inject external JS
-        scriptEl.text(scriptResponse.body!!.string())
+        scriptEl.text(scriptResponse.body.string())
         return super.pageListParse(document)
     }
 }

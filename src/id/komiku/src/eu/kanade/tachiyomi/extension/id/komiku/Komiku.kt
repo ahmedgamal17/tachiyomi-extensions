@@ -66,10 +66,10 @@ class Komiku : ParsedHttpSource() {
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesRequest(page: Int): Request {
-        if (page == 1) {
-            return GET("$baseUrl/pustaka/?orderby=modified", headers)
+        return if (page == 1) {
+            GET("$baseUrl/pustaka/?orderby=modified", headers)
         } else {
-            return GET("$baseUrl/pustaka/page/$page/?orderby=modified", headers)
+            GET("$baseUrl/pustaka/page/$page/?orderby=modified", headers)
         }
     }
 
@@ -110,6 +110,7 @@ class Komiku : ParsedHttpSource() {
                         url = ("$baseUrl/pustaka" + if (page > 1) "/page/$page/" else "" + "?tipe=projek").toHttpUrlOrNull()!!.newBuilder()
                     }
                 }
+                else -> {}
             }
         }
         return GET(url.toString(), headers)
@@ -159,26 +160,26 @@ class Komiku : ParsedHttpSource() {
         Filter.Separator(),
         Filter.Header("NOTE: cant be used with other filter!"),
         Filter.Header("$name Project List page"),
-        ProjectList(ProjectFilter),
+        ProjectList(projectFilter),
     )
 
-    private val ProjectFilter = arrayOf(
+    private val projectFilter = arrayOf(
         Status("Show all manga", ""),
-        Status("Show only project manga", "project-filter-on")
+        Status("Show only project manga", "project-filter-on"),
     )
 
     private val categoryNames = arrayOf(
         Category("All", ""),
         Category("Manga", "manga"),
         Category("Manhua", "manhua"),
-        Category("Manhwa", "manhwa")
+        Category("Manhwa", "manhwa"),
     )
 
     private val orderBy = arrayOf(
         Order("Ranking", "meta_value_num"),
         Order("New Title", "date"),
         Order("Updates", "modified"),
-        Order("Random", "rand")
+        Order("Random", "rand"),
     )
 
     private val genreList = arrayOf(
@@ -233,13 +234,13 @@ class Komiku : ParsedHttpSource() {
         Genre("Urban", "urban"),
         Genre("Vampire", "vampire"),
         Genre("Webtoons", "webtoons"),
-        Genre("Yuri", "yuri")
+        Genre("Yuri", "yuri"),
     )
 
     private val statusList = arrayOf(
         Status("All", ""),
         Status("Ongoing", "ongoing"),
-        Status("End", "end")
+        Status("End", "end"),
     )
 
     // manga details
@@ -273,17 +274,17 @@ class Komiku : ParsedHttpSource() {
         name = element.select("a").text()
 
         val timeStamp = element.select("td.tanggalseries")
-        if (timeStamp.text().contains("lalu")) {
-            date_upload = parseRelativeDate(timeStamp.text().trim()) ?: 0
+        date_upload = if (timeStamp.text().contains("lalu")) {
+            parseRelativeDate(timeStamp.text().trim())
         } else {
-            date_upload = parseDate(timeStamp.last())
+            parseDate(timeStamp.last()!!)
         }
     }
 
     private fun parseDate(element: Element): Long = SimpleDateFormat("dd/MM/yyyy", Locale.US).parse(element.text())?.time ?: 0
 
     // Used Google translate here
-    private fun parseRelativeDate(date: String): Long? {
+    private fun parseRelativeDate(date: String): Long {
         val trimmedDate = date.substringBefore(" lalu").removeSuffix("s").split(" ")
 
         val calendar = Calendar.getInstance()

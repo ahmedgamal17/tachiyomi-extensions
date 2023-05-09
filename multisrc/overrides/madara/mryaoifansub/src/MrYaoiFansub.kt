@@ -12,9 +12,9 @@ import java.util.concurrent.TimeUnit
 
 class MrYaoiFansub : Madara(
     "MR Yaoi Fansub",
-    "https://mrtenzus.com",
+    "https://mrbenne.com",
     "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
+    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()

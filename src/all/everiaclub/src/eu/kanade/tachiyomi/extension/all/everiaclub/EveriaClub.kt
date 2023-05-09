@@ -19,10 +19,18 @@ class EveriaClub() : ParsedHttpSource() {
     override val name = "Everia.club"
     override val supportsLatest = true
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
+    private val Element.imgSrc: String
+        get() = attr("data-lazy-src")
+            .ifEmpty { attr("data-src") }
+            .ifEmpty { attr("src") }
+
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").attr("abs:src")
+        manga.thumbnail_url = element.selectFirst("img")!!.imgSrc
         manga.title = element.select(".entry-title").text()
         manga.setUrlWithoutDomain(element.select(".entry-title > a").attr("abs:href"))
         return manga
@@ -38,7 +46,7 @@ class EveriaClub() : ParsedHttpSource() {
     // Popular
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").attr("abs:src")
+        manga.thumbnail_url = element.selectFirst("img")!!.imgSrc
         manga.title = element.select("h3").text()
         manga.setUrlWithoutDomain(element.select("h3 > a").attr("abs:href"))
         return manga
@@ -77,14 +85,15 @@ class EveriaClub() : ParsedHttpSource() {
             genres.add(it.text())
         }
         manga.genre = genres.joinToString(", ")
+        manga.status = SManga.COMPLETED
         return manga
     }
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.select("link[rel=\"canonical\"]").attr("href"))
-        chapter.chapter_number = 0F
-        chapter.name = element.select(".entry-title").text()
+        chapter.chapter_number = -2f
+        chapter.name = "Gallery"
         chapter.date_upload = getDate(element.select("link[rel=\"canonical\"]").attr("href"))
         return chapter
     }
@@ -94,8 +103,9 @@ class EveriaClub() : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        document.select(".wp-block-gallery img").forEachIndexed { i, it ->
-            val itUrl = it.attr("src")
+        document.select("noscript").remove()
+        document.select("article img").forEachIndexed { i, it ->
+            val itUrl = it.imgSrc
             pages.add(Page(i, itUrl, itUrl))
         }
         return pages
@@ -113,13 +123,15 @@ class EveriaClub() : ParsedHttpSource() {
     )
 
     open class UriPartFilter(
-        displayName: String, private val valuePair: Array<Pair<String, String>>
+        displayName: String,
+        private val valuePair: Array<Pair<String, String>>,
     ) : Filter.Select<String>(displayName, valuePair.map { it.first }.toTypedArray()) {
         fun toUriPart() = valuePair[state].second
     }
 
     class CategoryFilter : UriPartFilter(
-        "Category", arrayOf(
+        "Category",
+        arrayOf(
             Pair("Any", ""),
             Pair("Gravure", "/gravure"),
             Pair("Aidol", "/aidol"),
@@ -128,7 +140,7 @@ class EveriaClub() : ParsedHttpSource() {
             Pair("Thailand", "/thailand"),
             Pair("Chinese", "/chinese"),
             Pair("Cosplay", "/cosplay"),
-        )
+        ),
     )
 
     class TagFilter : Filter.Text("Tag")

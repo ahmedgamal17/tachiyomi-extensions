@@ -39,7 +39,7 @@ class Hiveworks : ParsedHttpSource() {
         .readTimeout(1, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
-        .build()!!
+        .build()
 
     // Popular
 
@@ -51,7 +51,7 @@ class Hiveworks : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val mangas = document.select(popularMangaSelector()).filterNot {
-            val url = it.select("a.comiclink").first().attr("abs:href")
+            val url = it.select("a.comiclink").first()!!.attr("abs:href")
             url.contains("sparklermonthly.com") || url.contains("explosm.net") // Filter Unsupported Comics
         }.map { element ->
             popularMangaFromElement(element)
@@ -91,6 +91,7 @@ class Hiveworks : ParsedHttpSource() {
                 is OriginalsFilter -> if (filter.state) return GET("$baseUrl/originals", headers)
                 is KidsFilter -> if (filter.state) return GET("$baseUrl/kids", headers)
                 is CompletedFilter -> if (filter.state) return GET("$baseUrl/completed", headers)
+                is HiatusFilter -> if (filter.state) return GET("$baseUrl/hiatus", headers)
                 else -> { /*Do nothing*/ }
             }
         }
@@ -107,7 +108,7 @@ class Hiveworks : ParsedHttpSource() {
         val url = response.request.url.toString()
         val document = response.asJsoup()
 
-        val selectManga = document.select(searchMangaSelector())
+        val selectManga = document.select(searchMangaSelector()).toList()
         val mangas = when {
             url.endsWith("localSearch") -> {
                 selectManga.filter { it.text().contains(searchQuery, true) }.map { element -> searchMangaFromElement(element) }
@@ -134,14 +135,14 @@ class Hiveworks : ParsedHttpSource() {
         author = element.select("div.header").text().substringAfter("by").trim()
         artist = author
         description = element.select("div.description").text().trim()
-        url = element.select("a").first().attr("href")
+        url = element.select("a").first()!!.attr("href")
     }
 
     // Common
 
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.url = element.select("a.comiclink").first().attr("abs:href")
+        manga.url = element.select("a.comiclink").first()!!.attr("abs:href")
         manga.title = element.select("h1").text().trim()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         manga.artist = element.select("h2").text().removePrefix("by").trim()
@@ -168,7 +169,7 @@ class Hiveworks : ParsedHttpSource() {
     private fun mangaDetailsParse(response: Response, url: String): SManga {
         val document = response.asJsoup()
         return document.select(popularMangaSelector())
-            .firstOrNull { url == it.select("a.comiclink").first().attr("abs:href") }
+            .firstOrNull { url == it.select("a.comiclink").first()!!.attr("abs:href") }
             ?.let { mangaFromElement(it) } ?: SManga.create()
     }
 
@@ -239,7 +240,7 @@ class Hiveworks : ParsedHttpSource() {
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
 
-        document.select("div#cc-comicbody img")?.forEach {
+        document.select("div#cc-comicbody img").forEach {
             pages.add(Page(pages.size, "", it.attr("src")))
         }
 
@@ -278,25 +279,28 @@ class Hiveworks : ParsedHttpSource() {
         Filter.Header("Extra Lists"),
         OriginalsFilter(),
         KidsFilter(),
-        CompletedFilter()
+        CompletedFilter(),
+        HiatusFilter(),
     )
 
     private class OriginalsFilter : Filter.CheckBox("Original Comics")
     private class KidsFilter : Filter.CheckBox("Kids Comics")
     private class CompletedFilter : Filter.CheckBox("Completed Comics")
+    private class HiatusFilter : Filter.CheckBox("On Hiatus Comics")
 
     private open class UriSelectFilter(
         displayName: String,
         val uriParam: String,
         val vals: Array<Pair<String, String>>,
         val firstIsUnspecified: Boolean = true,
-        defaultValue: Int = 0
+        defaultValue: Int = 0,
     ) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue), UriFilter {
         override fun addToUri(uri: Uri.Builder) {
-            if (state != 0 || !firstIsUnspecified)
+            if (state != 0 || !firstIsUnspecified) {
                 uri.appendPath(uriParam)
                     .appendPath(vals[state].first)
+            }
         }
     }
 
@@ -315,8 +319,8 @@ class Hiveworks : ParsedHttpSource() {
             Pair("thursday", "Thursday"),
             Pair("friday", "Friday"),
             Pair("saturday", "Saturday"),
-            Pair("sunday", "Sunday")
-        )
+            Pair("sunday", "Sunday"),
+        ),
     )
 
     private class RatingFilter : UriSelectFilter(
@@ -327,8 +331,8 @@ class Hiveworks : ParsedHttpSource() {
             Pair("everyone", "Everyone"),
             Pair("teen", "Teen"),
             Pair("young-adult", "Young Adult"),
-            Pair("mature", "Mature")
-        )
+            Pair("mature", "Mature"),
+        ),
     )
 
     private class GenreFilter : UriSelectFilter(
@@ -354,8 +358,8 @@ class Hiveworks : ParsedHttpSource() {
             Pair("slice-of-life", "Slice of Life"),
             Pair("steampunk", "Steampunk"),
             Pair("superhero", "Superhero"),
-            Pair("urban-fantasy", "Urban Fantasy")
-        )
+            Pair("urban-fantasy", "Urban Fantasy"),
+        ),
     )
 
     private class TitleFilter : UriSelectFilter(
@@ -389,8 +393,8 @@ class Hiveworks : ParsedHttpSource() {
             Pair("x", "X"),
             Pair("y", "Y"),
             Pair("z", "Z"),
-            Pair("numbers-symbols", "Numbers / Symbols")
-        )
+            Pair("numbers-symbols", "Numbers / Symbols"),
+        ),
     )
 
     private class SortFilter : UriSelectFilter(
@@ -399,8 +403,8 @@ class Hiveworks : ParsedHttpSource() {
         arrayOf(
             Pair("none", "None"),
             Pair("a-z", "A-Z"),
-            Pair("z-a", "Z-A")
-        )
+            Pair("z-a", "Z-A"),
+        ),
     )
 
     // Other Code
@@ -415,7 +419,7 @@ class Hiveworks : ParsedHttpSource() {
                     name = "#$chapterNumber ${it.select("div.archive-title").text()} (${it.select(".archive-game").text()})"
                     url = it.select("a").attr("abs:href")
                     date_upload = parseDate(it.select(".archive-date").text().substringAfter(", "), awkwardzombieDateFormat)
-                }
+                },
             )
         }
         return chapters

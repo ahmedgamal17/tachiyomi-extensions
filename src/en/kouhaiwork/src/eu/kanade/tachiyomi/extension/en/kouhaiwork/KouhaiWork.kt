@@ -81,28 +81,25 @@ class KouhaiWork : HttpSource() {
             }!!
         }
 
-    // Request the actual manga URL for the webview
     override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/series/${manga.url}", headers)
+        GET("$API_URL/manga/get/${manga.url}", headers)
 
-    override fun fetchMangaDetails(manga: SManga) =
-        client.newCall(chapterListRequest(manga)).asObservableSuccess().map {
-            val series = it.decode<KouhaiSeriesDetails>()
-            manga.description = series.toString()
-            manga.author = series.authors?.joinToString()
-            manga.artist = series.artists?.joinToString()
-            manga.genre = series.tags.joinToString()
-            manga.status = when (series.status) {
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val series = response.decode<KouhaiSeriesDetails>()
+            description = series.toString()
+            author = series.authors?.joinToString()
+            artist = series.artists?.joinToString()
+            genre = series.tags.joinToString()
+            status = when (series.status) {
                 "ongoing" -> SManga.ONGOING
                 "finished" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            manga.initialized = true
-            return@map manga
-        }!!
+            initialized = true
+        }
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$API_URL/manga/get/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response) =
         response.decode<KouhaiSeriesDetails>().chapters.map {
@@ -122,15 +119,16 @@ class KouhaiWork : HttpSource() {
         response.decode<KouhaiPages>("chapter")
             .mapIndexed { idx, img -> Page(idx, "", img.toString()) }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/read/${chapter.url}"
+
     override fun getFilterList() = FilterList(
         GenresFilter(),
         ThemesFilter(),
         DemographicsFilter(),
-        StatusFilter()
+        StatusFilter(),
     )
-
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
 
     override fun imageUrlParse(response: Response) =
         throw UnsupportedOperationException("Not used")
@@ -148,12 +146,12 @@ class KouhaiWork : HttpSource() {
             } ?: emptyList(),
             find<StatusFilter>()?.takeIf { it.state != 0 }?.let {
                 KouhaiTag(it.state - 1, it.values[it.state])
-            }
-        )
+            },
+        ),
     ).toString()
 
     private inline fun <reified T> Response.decode(key: String = "data") =
         json.decodeFromJsonElement<T>(
-            json.parseToJsonElement(body!!.string()).jsonObject[key]!!
+            json.parseToJsonElement(body.string()).jsonObject[key]!!,
         )
 }

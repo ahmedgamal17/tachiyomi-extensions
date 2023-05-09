@@ -8,19 +8,23 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 abstract class ReaderFront(
     final override val name: String,
     final override val baseUrl: String,
-    final override val lang: String
+    final override val lang: String,
 ) : HttpSource() {
     override val supportsLatest = true
 
@@ -39,13 +43,16 @@ abstract class ReaderFront(
         GET("$apiUrl?query=${works(i18n.id, "stub", "ASC", page, 120)}", headers)
 
     override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/work/$lang/${manga.url}", headers)
+        GET("$apiUrl?query=${work(i18n.id, manga.url)}", headers)
 
     override fun chapterListRequest(manga: SManga) =
-        GET("$apiUrl?query=${chaptersByWork(i18n.id, manga.url)}", headers)
+        GET("$apiUrl?query=${chaptersByWork(i18n.id, manga.url)}#${manga.url}", headers)
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$apiUrl?query=${chapterById(chapter.url.toInt())}", headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val jsonObj = json.parseToJsonElement(chapter.url).jsonObject
+        val id = jsonObj["id"]!!.jsonPrimitive.content
+        return GET("$apiUrl?query=${chapterById(id.toInt())}", headers)
+    }
 
     override fun latestUpdatesParse(response: Response) =
         response.parse<List<Work>>("works").map {
@@ -88,15 +95,24 @@ abstract class ReaderFront(
             }
         }
 
-    override fun chapterListParse(response: Response) =
-        response.parse<List<Release>>("chaptersByWork").map {
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val stub = response.request.url.fragment ?: ""
+        return response.parse<List<Release>>("chaptersByWork").map {
             SChapter.create().apply {
-                url = it.id.toString()
+                val jsonObject = buildJsonObject {
+                    put("id", it.id)
+                    put("stub", stub)
+                    put("volume", it.volume)
+                    put("chapter", it.chapter)
+                    put("subchapter", it.subchapter)
+                }
+                url = json.encodeToString(jsonObject)
                 name = it.toString()
                 chapter_number = it.number
                 date_upload = it.timestamp
             }
         }
+    }
 
     override fun pageListParse(response: Response) =
         response.parse<Chapter>("chapterById").let {
@@ -105,10 +121,16 @@ abstract class ReaderFront(
             }
         }
 
-    override fun fetchMangaDetails(manga: SManga) =
-        GET("$apiUrl?query=${work(i18n.id, manga.url)}", headers).let {
-            client.newCall(it).asObservableSuccess().map(::mangaDetailsParse)
-        }!!
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/work/$lang/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val jsonObj = json.parseToJsonElement(chapter.url).jsonObject
+        val stub = jsonObj["stub"]!!.jsonPrimitive.content
+        val volume = jsonObj["volume"]!!.jsonPrimitive.content
+        val chpter = jsonObj["chapter"]!!.jsonPrimitive.content
+        val subChpter = jsonObj["subchapter"]!!.jsonPrimitive.content
+        return "$baseUrl/read/$stub/$lang/$volume/$chpter.$subChpter"
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
         client.newCall(popularMangaRequest(page)).asObservableSuccess().map { res ->
@@ -129,7 +151,7 @@ abstract class ReaderFront(
         copy(mangas.filter(predicate))
 
     private inline fun <reified T> Response.parse(name: String) =
-        json.parseToJsonElement(body!!.string()).jsonObject.run {
+        json.parseToJsonElement(body.string()).jsonObject.run {
             if (containsKey("errors")) {
                 throw Error(get("errors")!![0]["message"].content)
             }

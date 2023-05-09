@@ -30,7 +30,7 @@ data class ComicInfoDto(
 
 @Serializable
 data class ComicDetailInfoResponseDto(
-    @SerialName("comicInfo") val info: ComicDetailInfoDto
+    @SerialName("comicInfo") val info: ComicDetailInfoDto,
 )
 
 @Serializable
@@ -40,13 +40,20 @@ data class ComicDetailInfoDto(
     val actionStatus: Int,
     val authorName: String,
     val categoryName: String,
-    val description: String
-)
+    val description: String,
+    val updateCycle: String,
+) {
+    companion object {
+        const val ONGOING = 1
+        const val COMPLETED = 2
+        const val ON_HIATUS = 3
+    }
+}
 
 @Serializable
 data class ComicChapterListDto(
     val comicInfo: ComicInfoDto,
-    val comicChapters: List<ComicChapterDto>
+    val comicChapters: List<ComicChapterDto>,
 )
 
 @Serializable
@@ -59,4 +66,21 @@ data class ComicChapterDto(
     val isAuth: Int,
     val chapterLevel: Int,
     val userLevel: Int,
+)
+
+@Serializable
+data class ChapterContentResponseDto(
+    @SerialName("chapterInfo") val chapterContent: ChapterContentDto,
+)
+
+@Serializable
+data class ChapterContentDto(
+    @SerialName("chapterId") val id: Long,
+    @SerialName("chapterPage") val pages: List<ChapterPageDto>,
+)
+
+@Serializable
+data class ChapterPageDto(
+    @SerialName("pageId") val id: String,
+    val url: String,
 )

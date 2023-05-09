@@ -18,7 +18,7 @@ data class Work(
     val description: String? = null,
     val demographic_name: String? = null,
     val genres: List<NameWrapper>? = null,
-    private val people_works: List<PeopleWorks>? = null
+    private val people_works: List<PeopleWorks>? = null,
 ) {
     @Transient
     val authors = people_works?.filter { it.role == 1 }
@@ -32,11 +32,11 @@ data class Work(
 @Serializable
 data class Release(
     val id: Int,
-    private val chapter: Int,
-    private val subchapter: Int,
-    private val volume: Int,
+    val chapter: Int,
+    val subchapter: Int,
+    val volume: Int,
     private val name: String,
-    private val releaseDate: String
+    private val releaseDate: String,
 ) {
     @Transient
     val number = "$chapter.$subchapter".toFloat()
@@ -66,7 +66,7 @@ data class Release(
 data class Chapter(
     private val uniqid: String,
     private val work: UniqidWrapper,
-    private val pages: List<Page>
+    private val pages: List<Page>,
 ) : Iterable<Page> by pages {
     /** Get the path of a page in the list. */
     fun path(page: Page) = "/works/$work/$this/$page"

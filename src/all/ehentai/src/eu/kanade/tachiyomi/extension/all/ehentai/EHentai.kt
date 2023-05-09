@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.CacheControl
@@ -35,7 +36,7 @@ import java.net.URLEncoder
 
 abstract class EHentai(
     override val lang: String,
-    private val ehLang: String
+    private val ehLang: String,
 ) : ConfigurableSource, HttpSource() {
 
     private val preferences: SharedPreferences by lazy {
@@ -80,7 +81,7 @@ abstract class EHentai(
                         }
                     }
                     // Get image
-                    it.parent().select(".glthumb img")?.first().apply {
+                    it.parent()?.select(".glthumb img")?.first().apply {
                         thumbnail_url = this?.attr("data-src")?.nullIfBlank()
                             ?: this?.attr("src")
                     }
@@ -101,8 +102,8 @@ abstract class EHentai(
                 url = manga.url
                 name = "Chapter"
                 chapter_number = 1f
-            }
-        )
+            },
+        ),
     )
 
     override fun fetchPageList(chapter: SChapter) = fetchChapterPage(chapter, "$baseUrl/${chapter.url}").map {
@@ -117,7 +118,7 @@ abstract class EHentai(
     private fun fetchChapterPage(
         chapter: SChapter,
         np: String,
-        pastUrls: List<String> = emptyList()
+        pastUrls: List<String> = emptyList(),
     ): Observable<List<String>> {
         val urls = ArrayList(pastUrls)
         return chapterPageCall(np).flatMap {
@@ -165,14 +166,14 @@ abstract class EHentai(
             .joinToString(",")
             .let { if (it.isNotEmpty()) ",$it" else it }
         uri.appendQueryParameter("f_search", modifiedQuery)
-        //when attempting to search with no genres selected, will auto select all genres
+        // when attempting to search with no genres selected, will auto select all genres
         filters.filterIsInstance<GenreGroup>().firstOrNull()?.state?.let {
-            //variable to to check is any genres are selected
-            val check = it.any { option -> option.state }  // or it.any(GenreOption::state)
-            //if no genres are selected by the user set all genres to on
+            // variable to to check is any genres are selected
+            val check = it.any { option -> option.state } // or it.any(GenreOption::state)
+            // if no genres are selected by the user set all genres to on
             if (!check) {
                 for (i in it) {
-                    (i as GenreOption).state = true
+                    i.state = true
                 }
             }
         }
@@ -209,7 +210,7 @@ abstract class EHentai(
                     }
                 }
                 headers.build()
-            } ?: headers
+            } ?: headers,
 
         ).let {
             if (!cache) {
@@ -293,7 +294,7 @@ abstract class EHentai(
                 val currentTags = it.select("div").map { element ->
                     Tag(
                         element.text().trim(),
-                        element.hasClass("gtl")
+                        element.hasClass("gtl"),
                     )
                 }
                 tags[namespace] = currentTags
@@ -302,6 +303,7 @@ abstract class EHentai(
             // Copy metadata to manga
             SManga.create().apply {
                 copyTo(this)
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
     }
@@ -354,7 +356,7 @@ abstract class EHentai(
     }
 
     // Headers
-    override fun headersBuilder() = super.headersBuilder().add("Cookie", cookiesHeader)!!
+    override fun headersBuilder() = super.headersBuilder().add("Cookie", cookiesHeader)
 
     private fun buildSettings(settings: List<String?>) = settings.filterNotNull().joinToString(separator = "-")
 
@@ -379,7 +381,7 @@ abstract class EHentai(
                 .build()
 
             chain.proceed(newReq)
-        }.build()!!
+        }.build()
 
     // Filters
     override fun getFilterList() = FilterList(
@@ -389,13 +391,14 @@ abstract class EHentai(
         TagFilter("Misc Tags", triStateBoxesFrom(miscTags), "other"),
         TagFilter("Female Tags", triStateBoxesFrom(femaleTags), "female"),
         TagFilter("Male Tags", triStateBoxesFrom(maleTags), "male"),
-        AdvancedGroup()
+        AdvancedGroup(),
     )
 
     class Watched : CheckBox("Watched List"), UriFilter {
         override fun addToUri(builder: Uri.Builder) {
-            if (state)
+            if (state) {
                 builder.appendPath("watched")
+            }
         }
     }
 
@@ -417,14 +420,15 @@ abstract class EHentai(
             GenreOption("Image Set", "imageset"),
             GenreOption("Cosplay", "cosplay"),
             GenreOption("Asian Porn", "asianporn"),
-            GenreOption("Misc", "misc")
-        )
+            GenreOption("Misc", "misc"),
+        ),
     )
 
     class AdvancedOption(name: String, private val param: String, defValue: Boolean = false) : CheckBox(name, defValue), UriFilter {
         override fun addToUri(builder: Uri.Builder) {
-            if (state)
+            if (state) {
                 builder.appendQueryParameter(param, "on")
+            }
         }
     }
 
@@ -451,8 +455,8 @@ abstract class EHentai(
                 "2 stars",
                 "3 stars",
                 "4 stars",
-                "5 stars"
-            )
+                "5 stars",
+            ),
         ),
         UriFilter {
         override fun addToUri(builder: Uri.Builder) {
@@ -477,8 +481,8 @@ abstract class EHentai(
             AdvancedOption("Show Expunged Galleries", "f_sh"),
             RatingOption(),
             MinPagesOption(),
-            MaxPagesOption()
-        )
+            MaxPagesOption(),
+        ),
     )
 
     private class EnforceLanguageFilter(default: Boolean) : CheckBox("Enforce language", default)
@@ -512,7 +516,7 @@ abstract class EHentai(
         Pair("thai", listOf("120", "1144", "2168")),
         Pair("vietnamese", listOf("130", "1154", "2178")),
         Pair("n/a", listOf("254", "1278", "2302")),
-        Pair("other", listOf("255", "1279", "2303"))
+        Pair("other", listOf("255", "1279", "2303")),
     )
 
     companion object {

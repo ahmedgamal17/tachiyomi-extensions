@@ -7,6 +7,7 @@ import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -40,7 +41,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Japscan"
 
-    override val baseUrl = "https://www.japscan.me"
+    override val baseUrl = "https://www.japscan.lol"
 
     override val lang = "fr"
 
@@ -52,7 +53,9 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(1, 2)
+        .build()
 
     companion object {
         val dateFormat by lazy {
@@ -65,6 +68,9 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     }
 
     private fun chapterListPref() = preferences.getString(SHOW_SPOILER_CHAPTERS, "hide")
+    
+    override fun headersBuilder() = super.headersBuilder()
+        .add("referer", "$baseUrl/")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -84,11 +90,11 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun popularMangaSelector() = "#top_mangas_week li > span"
+    override fun popularMangaSelector() = "#top_mangas_week li"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        element.select("a").first().let {
+        element.select("a").first()!!.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.text()
             manga.thumbnail_url = "$baseUrl/imgs/${it.attr("href").replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
@@ -114,7 +120,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesSelector() = "#chapters > div > h3.text-truncate"
+    override fun latestUpdatesSelector() = "#chapters h3.text-truncate, #chapters_list h3.text-truncate"
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -127,6 +133,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 when (filter) {
                     is TextField -> uri.appendPath(((page - 1) + filter.state.toInt()).toString())
                     is PageList -> uri.appendPath(((page - 1) + filter.values[filter.state]).toString())
+                    else -> {}
                 }
             }
             return GET(uri.toString(), headers)
@@ -143,14 +150,14 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 val searchResponse = client.newCall(searchRequest).execute()
 
                 if (!searchResponse.isSuccessful) {
-                    throw Exception("Unexpected code ${searchResponse.code}")
+                    throw Exception("Code ${searchResponse.code} inattendu")
                 }
 
-                val jsonResult = json.parseToJsonElement(searchResponse.body!!.string()).jsonArray
+                val jsonResult = json.parseToJsonElement(searchResponse.body.string()).jsonArray
 
                 if (jsonResult.isEmpty()) {
                     Log.d("japscan", "Search not returning anything, using duckduckgo")
-                    throw Exception("No data")
+                    throw Exception("Pas de données")
                 }
 
                 return searchRequest
@@ -170,7 +177,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         if ("live-search" in response.request.url.toString()) {
-            val jsonResult = json.parseToJsonElement(response.body!!.string()).jsonArray
+            val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
 
             val mangaList = jsonResult.map { jsonEl -> searchMangaFromJson(jsonEl.jsonObject) }
 
@@ -203,12 +210,13 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div#main > .card > .card-body").first()
+        val infoElement = document.selectFirst("#main .card-body")!!
 
         val manga = SManga.create()
-        manga.thumbnail_url = "$baseUrl/${infoElement.select(".d-flex > div.m-2:eq(0) > img").attr("src")}"
+        manga.thumbnail_url = infoElement.select("img").attr("abs:src")
 
-        infoElement.select(".d-flex > div.m-2:eq(1) > p.mb-2").forEachIndexed { _, el ->
+        val infoRows = infoElement.select(".row, .d-flex")
+        infoRows.select("p").forEach { el ->
             when (el.select("span").text().trim()) {
                 "Auteur(s):" -> manga.author = el.text().replace("Auteur(s):", "").trim()
                 "Artiste(s):" -> manga.artist = el.text().replace("Artiste(s):", "").trim()
@@ -218,7 +226,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 }
             }
         }
-        manga.description = infoElement.select("> p").text().orEmpty()
+        manga.description = infoElement.select("div:contains(Synopsis) + p").text().orEmpty()
 
         return manga
     }
@@ -235,13 +243,13 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()
+        val urlElement = element.selectFirst("a")!!
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         chapter.name = urlElement.ownText()
         // Using ownText() doesn't include childs' text, like "VUS" or "RAW" badges, in the chapter name.
-        chapter.date_upload = element.select("> span").text().trim().let { parseChapterDate(it) }
+        chapter.date_upload = element.selectFirst("span")!!.text().trim().let { parseChapterDate(it) }
         return chapter
     }
 
@@ -252,6 +260,10 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             0L
         }
     }
+
+    private val decodingStringsRe: Regex = Regex("""'([\dA-Z]{62})'""", RegexOption.IGNORE_CASE)
+
+    private val sortedLookupString: List<Char> = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".toCharArray().toList()
 
     override fun pageListParse(document: Document): List<Page> {
         /*
@@ -267,25 +279,20 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             it.attr("src").contains("zjs", ignoreCase = true)
         }.attr("src")
         Log.d("japscan", "ZJS at $zjsurl")
-        val zjs = client.newCall(GET(baseUrl + zjsurl, headers)).execute().body!!.string()
+        val zjs = client.newCall(GET(baseUrl + zjsurl, headers)).execute().body.string()
 
-        val strings = zjs
-            .substringAfter("= [")
-            .substringBefore("];")
-            .split(",")
-            .map { it.trim().removeSurrounding("'").reversed() }
+        val stringLookupTables = decodingStringsRe.findAll(zjs).mapNotNull {
+            it.groupValues[1].takeIf {
+                it.toCharArray().sorted() == sortedLookupString
+            }
+        }.toList()
 
-        val stringLookupTables = strings.filter {
-            it.length == 62 &&
-                it.toCharArray().sorted().joinToString("") == "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-        }
-
-        if (stringLookupTables.size > 2) {
-            throw Exception("Expected only two lookup tables in ZJS")
+        if (stringLookupTables.size != 2) {
+            throw Exception("Attendait 2 chaînes de recherche dans ZJS, a trouvé ${stringLookupTables.size}")
         }
         Log.d("japscan", "lookup tables: $stringLookupTables")
 
-        val scrambledData = document.getElementById("data").attr("data-data")
+        val scrambledData = document.getElementById("data")!!.attr("data-data")
 
         for (i in 0..1) {
             Log.d("japscan", "descramble attempt $i")
@@ -293,6 +300,12 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             val lookupTable = stringLookupTables[i].zip(stringLookupTables[otherIndice]).toMap()
             try {
                 val unscrambledData = scrambledData.map { lookupTable[it] ?: it }.joinToString("")
+                if (!unscrambledData.startsWith("ey")) {
+                    // `ey` is the Base64 representation of a curly bracket. Since we're expecting a
+                    // JSON object, we're counting this attempt as failed if it doesn't start with a
+                    // curly bracket.
+                    continue
+                }
                 val decoded = Base64.decode(unscrambledData, Base64.DEFAULT).toString(Charsets.UTF_8)
 
                 val data = json.parseToJsonElement(decoded).jsonObject
@@ -300,10 +313,10 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 return data["imagesLink"]!!.jsonArray.mapIndexed { idx, it ->
                     Page(idx, imageUrl = it.jsonPrimitive.content)
                 }
-            } catch (_: Exception) {}
+            } catch (_: Throwable) {}
         }
 
-        throw Exception("Both descrambling attempts failed")
+        throw Exception("Les deux tentatives de désembrouillage ont échoué")
     }
 
     override fun imageUrlParse(document: Document): String = ""
@@ -322,13 +335,15 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             }
             FilterList(
                 Filter.Header("Page alphabétique"),
-                PageList(pagelist.toTypedArray())
+                PageList(pagelist.toTypedArray()),
             )
-        } else FilterList(
-            Filter.Header("Page alphabétique"),
-            TextField("Page #"),
-            Filter.Header("Appuyez sur reset pour la liste")
-        )
+        } else {
+            FilterList(
+                Filter.Header("Page alphabétique"),
+                TextField("Page #"),
+                Filter.Header("Appuyez sur reset pour la liste"),
+            )
+        }
     }
 
     private var pageNumberDoc: Document? = null

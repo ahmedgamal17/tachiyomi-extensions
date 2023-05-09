@@ -71,7 +71,9 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     // Both are volumes, multiply by 100 and do normal sort
                     return if ((a.chapter_number * 100) < (b.chapter_number * 100)) {
                         1
-                    } else -1
+                    } else {
+                        -1
+                    }
                 } else {
                     if (a.chapter_number < 1.0 && b.chapter_number >= 1.0) {
                         // A is volume, b is not. A should sort first
@@ -104,9 +106,10 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
     private val apiUrl by lazy { getPrefApiUrl() }
     override val baseUrl by lazy { getPrefBaseUrl() }
     private val address by lazy { getPrefAddress() } // Address for the Kavita OPDS url. Should be http(s)://host:(port)/api/opds/api-key
+    private val apiKey by lazy { getPrefApiKey() }
     private var jwtToken = "" // * JWT Token for authentication with the server. Stored in memory.
     private val LOG_TAG = """extension.all.kavita_${"[$suffix]_" + preferences.getString(KavitaConstants.customSourceNamePref,"[$suffix]")!!.replace(' ','_')}"""
-    private var isLoged = false // Used to know if login was correct and not send login requests anymore
+    private var isLogged = false // Used to know if login was correct and not send login requests anymore
 
     private val json: Json by injectLazy()
     private val helper = KavitaHelper()
@@ -121,10 +124,10 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 Log.e(LOG_TAG, "Empty body String for request url: ${it.request.url}")
                 throw EmptyRequestBody(
                     "Body of the response is empty. RequestUrl=${it.request.url}\nPlease check your kavita instance is up to date",
-                    Throwable("Error. Request body is empty")
+                    Throwable("Error. Request body is empty"),
                 )
             }
-            json.decodeFromString(it.body?.string().orEmpty())
+            json.decodeFromString(it.body.string())
         }
     private inline fun <reified T : Enum<T>> safeValueOf(type: String): T {
         return java.lang.Enum.valueOf(T::class.java, type)
@@ -133,13 +136,13 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
     private var series = emptyList<SeriesDto>() // Acts as a cache
 
     override fun popularMangaRequest(page: Int): Request {
-        if (!isLoged) {
+        if (!isLogged) {
             doLogin()
         }
         return POST(
             "$apiUrl/series/all?pageNumber=$page&libraryId=0&pageSize=20",
             headersBuilder().build(),
-            buildFilterBody(currentFilter)
+            buildFilterBody(currentFilter),
         )
     }
 
@@ -147,7 +150,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         try {
             val result = response.parseAs<List<SeriesDto>>()
             series = result
-            val mangaList = result.map { item -> helper.createSeriesDto(item, apiUrl) }
+            val mangaList = result.map { item -> helper.createSeriesDto(item, apiUrl, apiKey) }
             return MangasPage(mangaList, helper.hasNextPage(response))
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Possible outdated kavita", e)
@@ -156,13 +159,13 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        if (!isLoged) {
+        if (!isLogged) {
             doLogin()
         }
         return POST(
             "$apiUrl/series/all?pageNumber=$page&libraryId=0&pageSize=20",
             headersBuilder().build(),
-            buildFilterBody(MetadataPayload(sorting = 4, sorting_asc = false, forceUseMetadataPayload = true))
+            buildFilterBody(MetadataPayload(sorting = 4, sorting_asc = false, forceUseMetadataPayload = true)),
         )
     }
 
@@ -179,7 +182,6 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         val newFilter = MetadataPayload() // need to reset it or will double
         filters.forEach { filter ->
             when (filter) {
-
                 is SortFilter -> {
                     if (filter.state != null) {
                         newFilter.sorting = filter.state!!.index + 1
@@ -196,10 +198,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 is ReleaseYearRangeGroup -> {
                     filter.state.forEach { content ->
                         if (content.state.isNotEmpty()) {
-                            if (content.name == "Min")
+                            if (content.name == "Min") {
                                 newFilter.releaseYearRangeMin = content.state.toInt()
-                            if (content.name == "Max")
+                            }
+                            if (content.name == "Max") {
                                 newFilter.releaseYearRangeMax = content.state.toInt()
+                            }
                         }
                     }
                 }
@@ -366,23 +370,22 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         val foundSerie = series.find { dto -> dto.id == serieId }
         return GET(
             "$baseUrl/library/${foundSerie!!.libraryId}/series/$serieId",
-            headersBuilder().build()
+            headersBuilder().build(),
         )
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-
         val result = response.parseAs<SeriesMetadataDto>()
 
         val existingSeries = series.find { dto -> dto.id == result.seriesId }
         if (existingSeries != null) {
-            val manga = helper.createSeriesDto(existingSeries, apiUrl)
+            val manga = helper.createSeriesDto(existingSeries, apiUrl, apiKey)
             manga.url = "$apiUrl/Series/${result.seriesId}"
             manga.artist = result.coverArtists.joinToString { it.name }
             manga.description = result.summary
             manga.author = result.writers.joinToString { it.name }
             manga.genre = result.genres.joinToString { it.title }
-            manga.thumbnail_url = "$apiUrl/image/series-cover?seriesId=${result.seriesId}"
+            manga.thumbnail_url = "$apiUrl/image/series-cover?seriesId=${result.seriesId}&apiKey=$apiKey"
 
             return manga
         }
@@ -502,8 +505,8 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
             pages.add(
                 Page(
                     index = i,
-                    imageUrl = "$apiUrl/Reader/image?chapterId=$chapterId&page=$i&extractPdf=true"
-                )
+                    imageUrl = "$apiUrl/Reader/image?chapterId=$chapterId&page=$i&extractPdf=true&apiKey=$apiKey",
+                ),
             )
         }
         return Observable.just(pages)
@@ -537,7 +540,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         "Editor",
         "Publisher",
         "Character",
-        "Translator"
+        "Translator",
     )
 
     private class UserRating :
@@ -549,8 +552,8 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 "2 stars",
                 "3 stars",
                 "4 stars",
-                "5 stars"
-            )
+                "5 stars",
+            ),
         )
 
     private class SortFilter(sortables: Array<String>) : Filter.Sort("Sort by", sortables, Selection(0, true))
@@ -560,7 +563,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         Pair("Created", 2),
         Pair("Last modified", 3),
         Pair("Item added", 4),
-        Pair("Time to Read", 5)
+        Pair("Time to Read", 5),
     )
 
     private class StatusFilter(name: String) : Filter.CheckBox(name, false)
@@ -665,7 +668,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
 
             if (sortableList.isNotEmpty() and toggledFilters.contains("Sort Options")) {
                 filtersLoaded.add(
-                    SortFilter(sortableList.map { it.first }.toTypedArray())
+                    SortFilter(sortableList.map { it.first }.toTypedArray()),
                 )
             }
             if (toggledFilters.contains("Read Status")) {
@@ -674,32 +677,32 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                         listOf(
                             "notRead",
                             "inProgress",
-                            "read"
-                        ).map { StatusFilter(it) }
-                    )
+                            "read",
+                        ).map { StatusFilter(it) },
+                    ),
                 )
             }
             if (toggledFilters.contains("ReleaseYearRange")) {
                 filtersLoaded.add(
                     ReleaseYearRangeGroup(
-                        listOf("Min", "Max").map { ReleaseYearRange(it) }
-                    )
+                        listOf("Min", "Max").map { ReleaseYearRange(it) },
+                    ),
                 )
             }
 
             if (genresListMeta.isNotEmpty() and toggledFilters.contains("Genres")) {
                 filtersLoaded.add(
-                    GenreFilterGroup(genresListMeta.map { GenreFilter(it.title) })
+                    GenreFilterGroup(genresListMeta.map { GenreFilter(it.title) }),
                 )
             }
             if (tagsListMeta.isNotEmpty() and toggledFilters.contains("Tags")) {
                 filtersLoaded.add(
-                    TagFilterGroup(tagsListMeta.map { TagFilter(it.title) })
+                    TagFilterGroup(tagsListMeta.map { TagFilter(it.title) }),
                 )
             }
             if (ageRatingsListMeta.isNotEmpty() and toggledFilters.contains("Age Rating")) {
                 filtersLoaded.add(
-                    AgeRatingFilterGroup(ageRatingsListMeta.map { AgeRatingFilter(it.title) })
+                    AgeRatingFilterGroup(ageRatingsListMeta.map { AgeRatingFilter(it.title) }),
                 )
             }
             if (toggledFilters.contains("Format")) {
@@ -710,33 +713,33 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                             "Archive",
                             "Pdf",
                             "Unknown",
-                        ).map { FormatFilter(it) }
-                    )
+                        ).map { FormatFilter(it) },
+                    ),
                 )
             }
             if (collectionsListMeta.isNotEmpty() and toggledFilters.contains("Collections")) {
                 filtersLoaded.add(
-                    CollectionFilterGroup(collectionsListMeta.map { CollectionFilter(it.title) })
+                    CollectionFilterGroup(collectionsListMeta.map { CollectionFilter(it.title) }),
                 )
             }
             if (languagesListMeta.isNotEmpty() and toggledFilters.contains("Languages")) {
                 filtersLoaded.add(
-                    LanguageFilterGroup(languagesListMeta.map { LanguageFilter(it.title) })
+                    LanguageFilterGroup(languagesListMeta.map { LanguageFilter(it.title) }),
                 )
             }
             if (libraryListMeta.isNotEmpty() and toggledFilters.contains("Libraries")) {
                 filtersLoaded.add(
-                    LibrariesFilterGroup(libraryListMeta.map { LibraryFilter(it.name) })
+                    LibrariesFilterGroup(libraryListMeta.map { LibraryFilter(it.name) }),
                 )
             }
             if (pubStatusListMeta.isNotEmpty() and toggledFilters.contains("Publication Status")) {
                 filtersLoaded.add(
-                    PubStatusFilterGroup(pubStatusListMeta.map { PubStatusFilter(it.title) })
+                    PubStatusFilterGroup(pubStatusListMeta.map { PubStatusFilter(it.title) }),
                 )
             }
             if (pubStatusListMeta.isNotEmpty() and toggledFilters.contains("Rating")) {
                 filtersLoaded.add(
-                    UserRating()
+                    UserRating(),
                 )
             }
 
@@ -746,78 +749,78 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     listOf<Filter<*>>(
                         PeopleHeaderFilter(""),
                         PeopleSeparatorFilter(),
-                        PeopleHeaderFilter("PEOPLE")
-                    )
+                        PeopleHeaderFilter("PEOPLE"),
+                    ),
                 )
                 if (peopleInRoles[0].isNotEmpty() and toggledFilters.contains("Writer")) {
                     filtersLoaded.add(
                         WriterPeopleFilterGroup(
-                            peopleInRoles[0].map { WriterPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[0].map { WriterPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[1].isNotEmpty() and toggledFilters.contains("Penciller")) {
                     filtersLoaded.add(
                         PencillerPeopleFilterGroup(
-                            peopleInRoles[1].map { PencillerPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[1].map { PencillerPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[2].isNotEmpty() and toggledFilters.contains("Inker")) {
                     filtersLoaded.add(
                         InkerPeopleFilterGroup(
-                            peopleInRoles[2].map { InkerPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[2].map { InkerPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[3].isNotEmpty() and toggledFilters.contains("Colorist")) {
                     filtersLoaded.add(
                         ColoristPeopleFilterGroup(
-                            peopleInRoles[3].map { ColoristPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[3].map { ColoristPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[4].isNotEmpty() and toggledFilters.contains("Letterer")) {
                     filtersLoaded.add(
                         LettererPeopleFilterGroup(
-                            peopleInRoles[4].map { LettererPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[4].map { LettererPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[5].isNotEmpty() and toggledFilters.contains("CoverArtist")) {
                     filtersLoaded.add(
                         CoverArtistPeopleFilterGroup(
-                            peopleInRoles[5].map { CoverArtistPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[5].map { CoverArtistPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[6].isNotEmpty() and toggledFilters.contains("Editor")) {
                     filtersLoaded.add(
                         EditorPeopleFilterGroup(
-                            peopleInRoles[6].map { EditorPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[6].map { EditorPeopleFilter(it.name) },
+                        ),
                     )
                 }
 
                 if (peopleInRoles[7].isNotEmpty() and toggledFilters.contains("Publisher")) {
                     filtersLoaded.add(
                         PublisherPeopleFilterGroup(
-                            peopleInRoles[7].map { PublisherPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[7].map { PublisherPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[8].isNotEmpty() and toggledFilters.contains("Character")) {
                     filtersLoaded.add(
                         CharacterPeopleFilterGroup(
-                            peopleInRoles[8].map { CharacterPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[8].map { CharacterPeopleFilter(it.name) },
+                        ),
                     )
                 }
                 if (peopleInRoles[9].isNotEmpty() and toggledFilters.contains("Translator")) {
                     filtersLoaded.add(
                         TranslatorPeopleFilterGroup(
-                            peopleInRoles[9].map { TranslatorPeopleFilter(it.name) }
-                        )
+                            peopleInRoles[9].map { TranslatorPeopleFilter(it.name) },
+                        ),
                     )
                     filtersLoaded
                 } else {
@@ -866,7 +869,6 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
             .add("Authorization", "Bearer $jwtToken")
     }
     private fun buildFilterBody(filter: MetadataPayload): RequestBody {
-
         val formats = if (filter.formats.isEmpty()) {
             buildJsonArray {
                 add(MangaFormat.Archive.ordinal)
@@ -891,7 +893,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                         put("inProgress", JsonPrimitive(true))
                         put("read", JsonPrimitive(true))
                     }
-                }
+                },
             )
             put("genres", buildJsonArray { filter.genres.map { add(it) } })
             put("writers", buildJsonArray { filter.peopleWriters.map { add(it) } })
@@ -915,7 +917,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 buildJsonObject {
                     put("sortField", filter.sorting)
                     put("isAscending", JsonPrimitive(filter.sorting_asc))
-                }
+                },
             )
             put("seriesNameQuery", filter.seriesNameQuery)
             put(
@@ -923,7 +925,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 buildJsonObject {
                     put("min", filter.releaseYearRangeMin)
                     put("max", filter.releaseYearRangeMax)
-                }
+                },
             )
         }
         return payload.toString().toRequestBody(JSON_MEDIA_TYPE)
@@ -934,7 +936,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
             ADDRESS_TITLE,
             "OPDS url",
             "",
-            "The OPDS url copied from User Settings. This should include address and the api key on end."
+            "The OPDS url copied from User Settings. This should include address and the api key on end.",
         )
         val enabledFiltersPref = MultiSelectListPreference(screen.context).apply {
             key = KavitaConstants.toggledFiltersPref
@@ -944,6 +946,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
             entryValues = KavitaConstants.filterPrefEntriesValue
             setDefaultValue(KavitaConstants.defaultFilterPrefEntries)
             setOnPreferenceChangeListener { _, newValue ->
+                @Suppress("UNCHECKED_CAST")
                 val checkValue = newValue as Set<String>
                 preferences.edit()
                     .putStringSet(KavitaConstants.toggledFiltersPref, checkValue)
@@ -962,7 +965,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 Toast.makeText(
                     screen.context,
                     "Restart Tachiyomi to apply new setting.",
-                    Toast.LENGTH_LONG
+                    Toast.LENGTH_LONG,
                 ).show()
                 Log.v(LOG_TAG, "[Preferences] Successfully modified custom source name: $newValue")
                 res
@@ -978,7 +981,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         title: String,
         default: String,
         summary: String,
-        isPassword: Boolean = false
+        isPassword: Boolean = false,
     ): EditTextPreference {
         return EditTextPreference(context).apply {
             key = preKey
@@ -1004,7 +1007,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                         Toast.makeText(
                             context,
                             "URL exists in a different source -> $opdsUrlInPref",
-                            Toast.LENGTH_LONG
+                            Toast.LENGTH_LONG,
                         ).show()
                         throw OpdsurlExistsInPref("Url exists in a different source -> $opdsUrlInPref")
                     }
@@ -1013,7 +1016,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     Toast.makeText(
                         context,
                         "Restart Tachiyomi to apply new setting.",
-                        Toast.LENGTH_LONG
+                        Toast.LENGTH_LONG,
                     ).show()
                     setupLogin(newValue)
                     Log.v(LOG_TAG, "[Preferences] Successfully modified OPDS URL")
@@ -1041,6 +1044,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
             path = path.substring(0, path.length - 1)
         }
         return path
+    }
+
+    private fun getPrefApiKey(): String {
+        // http(s)://host:(port)/api/opds/api-key
+        var existingKey = preferences.getString("APIKEY", "")
+        return existingKey!!.ifEmpty { preferences.getString(ADDRESS_TITLE, "")!!.split("/opds/")[1] }
     }
 
     companion object {
@@ -1097,7 +1106,6 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
     }
 
     private fun doLogin() {
-
         if (address.isEmpty()) {
             Log.e(LOG_TAG, "OPDS URL is empty or null")
             throw IOException("You must setup the Address to communicate with Kavita")
@@ -1109,7 +1117,8 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
         Log.v(LOG_TAG, "[Login] Starting login")
         val request = POST(
             "$apiUrl/Plugin/authenticate?apiKey=${getPrefKey()}&pluginName=Tachiyomi-Kavita",
-            setupLoginHeaders().build(), "{}".toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+            setupLoginHeaders().build(),
+            "{}".toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()),
         )
         client.newCall(request).execute().use {
             val peekbody = it.peekBody(Long.MAX_VALUE).toString()
@@ -1117,7 +1126,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
             if (it.code == 200) {
                 try {
                     jwtToken = it.parseAs<AuthenticationDto>().token
-                    isLoged = true
+                    isLogged = true
                 } catch (e: Exception) {
                     Log.e(LOG_TAG, "Possible outdated kavita", e)
                     throw IOException("Please check your kavita version.\nv0.5+ is required for the extension to work properly")
@@ -1148,7 +1157,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     Log.e(
                         LOG_TAG,
                         "Extension version: code=${AppInfo.getVersionCode()}  name=${AppInfo.getVersionName()}" +
-                            " - - Kavita version: ${serverInfoDto.kavitaVersion}"
+                            " - - Kavita version: ${serverInfoDto.kavitaVersion}",
                     ) // this is not a real error. Using this so it gets printed in dump logs if there's any error
                 } catch (e: EmptyRequestBody) {
                     Log.e(LOG_TAG, "Extension version: code=${AppInfo.getVersionCode()} - name=${AppInfo.getVersionName()}")
@@ -1162,18 +1171,9 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                         .execute().use { response ->
 
                             genresListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "[Filter] Error decoding JSON for genres filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
-                                Log.e(LOG_TAG, "[Filter] Error decoding JSON for genres filter -> ${response.body!!}", e)
+                                Log.e(LOG_TAG, "[Filter] Error decoding JSON for genres filter -> ${response.body}", e)
                                 emptyList()
                             }
                         }
@@ -1181,16 +1181,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Metadata/tags", headersBuilder().build()))
                         .execute().use { response ->
                             tagsListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "[Filter] Error decoding JSON for tagsList filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(LOG_TAG, "[Filter] Error decoding JSON for tagsList filter", e)
                                 emptyList()
@@ -1200,21 +1191,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Metadata/age-ratings", headersBuilder().build()))
                         .execute().use { response ->
                             ageRatingsListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "[Filter] Error decoding JSON for age-ratings filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(
                                     LOG_TAG,
                                     "[Filter] Error decoding JSON for age-ratings filter",
-                                    e
+                                    e,
                                 )
                                 emptyList()
                             }
@@ -1223,21 +1205,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Collection", headersBuilder().build()))
                         .execute().use { response ->
                             collectionsListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "[Filter] Error decoding JSON for collectionsListMeta filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(
                                     LOG_TAG,
                                     "[Filter] Error decoding JSON for collectionsListMeta filter",
-                                    e
+                                    e,
                                 )
                                 emptyList()
                             }
@@ -1246,21 +1219,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Metadata/languages", headersBuilder().build()))
                         .execute().use { response ->
                             languagesListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "[Filter] Error decoding JSON for languagesListMeta filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(
                                     LOG_TAG,
                                     "[Filter] Error decoding JSON for languagesListMeta filter",
-                                    e
+                                    e,
                                 )
                                 emptyList()
                             }
@@ -1269,21 +1233,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Library", headersBuilder().build()))
                         .execute().use { response ->
                             libraryListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "[Filter] Error decoding JSON for libraries filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(
                                     LOG_TAG,
                                     "[Filter] Error decoding JSON for libraries filter",
-                                    e
+                                    e,
                                 )
                                 emptyList()
                             }
@@ -1292,21 +1247,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Metadata/people", headersBuilder().build()))
                         .execute().use { response ->
                             peopleListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "error while decoding JSON for peopleListMeta filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(
                                     LOG_TAG,
                                     "error while decoding JSON for peopleListMeta filter",
-                                    e
+                                    e,
                                 )
                                 emptyList()
                             }
@@ -1314,21 +1260,12 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                     client.newCall(GET("$apiUrl/Metadata/publication-status", headersBuilder().build()))
                         .execute().use { response ->
                             pubStatusListMeta = try {
-                                val responseBody = response.body
-                                if (responseBody != null) {
-                                    responseBody.use { json.decodeFromString(it.string()) }
-                                } else {
-                                    Log.e(
-                                        LOG_TAG,
-                                        "error while decoding JSON for publicationStatusListMeta filter: response body is null. Response code: ${response.code}"
-                                    )
-                                    emptyList()
-                                }
+                                response.body.use { json.decodeFromString(it.string()) }
                             } catch (e: Exception) {
                                 Log.e(
                                     LOG_TAG,
                                     "error while decoding JSON for publicationStatusListMeta filter",
-                                    e
+                                    e,
                                 )
                                 emptyList()
                             }
@@ -1343,9 +1280,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                 .subscribe(
                     {},
                     { tr ->
-                        /**
-                         * Avoid polluting logs with traces of exception
-                         * **/
+                        // Avoid polluting logs with traces of exception
                         if (tr is EmptyRequestBody || tr is LoginErrorException) {
                             Log.e(LOG_TAG, "error while doing initial calls\n${tr.cause}")
                             return@subscribe
@@ -1355,7 +1290,7 @@ class Kavita(private val suffix: String = "") : ConfigurableSource, UnmeteredSou
                             return@subscribe
                         }
                         Log.e(LOG_TAG, "error while doing initial calls", tr)
-                    }
+                    },
                 )
         }
     }

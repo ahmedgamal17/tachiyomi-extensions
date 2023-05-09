@@ -9,11 +9,11 @@ class MangAdventureGenerator : ThemeSourceGenerator {
 
     override val themeClass = "MangAdventure"
 
-    override val baseVersionCode = 10
+    override val baseVersionCode = 12
 
     override val sources = listOf(
         SingleLang("Arc-Relight", "https://arc-relight.com", "en", className = "ArcRelight"),
-        SingleLang("Assorted Scans", "https://assortedscans.com", "en", overrideVersionCode = 1),
+        SingleLang("Assorted Scans", "https://assortedscans.com", "en", overrideVersionCode = 2),
     )
 
     companion object {

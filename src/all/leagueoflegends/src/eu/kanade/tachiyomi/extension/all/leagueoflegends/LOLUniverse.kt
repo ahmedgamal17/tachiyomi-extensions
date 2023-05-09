@@ -18,7 +18,7 @@ import java.util.Locale
 
 class LOLUniverse(
     private val siteLang: String,
-    override val lang: String = siteLang.substring(0, 2)
+    override val lang: String = siteLang.substring(0, 2),
 ) : HttpSource() {
     override val baseUrl = "$UNIVERSE_URL/$siteLang/comic/"
 
@@ -36,10 +36,6 @@ class LOLUniverse(
     override fun popularMangaRequest(page: Int) =
         GET("$MEEPS_URL/$siteLang/comics/index.json", headers)
 
-    // Request the actual manga URL for the webview
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$UNIVERSE_URL/$siteLang/comic/${manga.url}")
-
     override fun chapterListRequest(manga: SManga) =
         GET("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json", headers)
 
@@ -47,11 +43,11 @@ class LOLUniverse(
         GET("$COMICS_URL/$siteLang/${chapter.url}/index.json", headers)
 
     override fun popularMangaParse(response: Response) =
-        response.decode<LOLHub>().map {
+        response.decode<LOLHub>().mapNotNull {
             SManga.create().apply {
-                title = it.title
+                title = it.title ?: return@mapNotNull null
                 url = it.toString()
-                description = it.description.clean()
+                description = it.description!!.clean()
                 thumbnail_url = it.background.toString()
                 genre = it.subtitle ?: it.champions?.joinToString()
             }
@@ -60,7 +56,7 @@ class LOLUniverse(
     override fun chapterListParse(response: Response) =
         response.decode<LOLIssues>().map {
             SChapter.create().apply {
-                name = it.title
+                name = it.title!!
                 url = it.toString()
                 chapter_number = it.index ?: -1f
                 fetchPageList()
@@ -88,10 +84,19 @@ class LOLUniverse(
     override fun fetchPageList(chapter: SChapter) =
         Observable.just(pageCache[chapter.url].orEmpty())!!
 
+    override fun getMangaUrl(manga: SManga) =
+        "$UNIVERSE_URL/$siteLang/comic/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter) =
+        "$UNIVERSE_URL/$siteLang/comic/${chapter.url}"
+
     override fun latestUpdatesRequest(page: Int) =
         throw UnsupportedOperationException("Not used")
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        throw UnsupportedOperationException("Not used")
+
+    override fun mangaDetailsRequest(manga: SManga) =
         throw UnsupportedOperationException("Not used")
 
     override fun latestUpdatesParse(response: Response) =
@@ -110,7 +115,7 @@ class LOLUniverse(
         throw UnsupportedOperationException("Not used")
 
     private inline fun <reified T> Response.decode() =
-        json.decodeFromString<T>(body!!.string())
+        json.decodeFromString<T>(body.string())
 
     private fun String.clean() =
         replace("</p> ", "</p>").replace("</p>", "\n").replace("<p>", "")
@@ -129,7 +134,7 @@ class LOLUniverse(
         mangas.filter {
             it.title.contains(query, true) ||
                 it.genre?.contains(query, true) ?: false
-        }
+        },
     )
 
     companion object {
