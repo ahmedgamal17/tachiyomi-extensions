@@ -99,7 +99,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
             .build()
         return if (query.isNotBlank()) {
             GET("$baseUrl/ajax/search?keyword=$query", postHeaders)
-        } else {
+        } else (query.isBlank()) {
             val url = "$baseUrl/series?page=$page".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
                 when (filter) {
@@ -143,7 +143,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            document.select("div.review-content").first().let { info ->
+            document.select("div.review-content").first()!!.let { info ->
                 description = info.select("p").text()
             }
             title = document.select("div.author-info-title > h1").text()
@@ -156,7 +156,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
             genre = document.select("div.review-author-info > a, div.full-list-info:contains(النوع) > small > a").joinToString(", ") { it.text() }
 
             // add series Status to manga description
-            document.select("div.full-list-info:contains(الحالة) > small > a")?.first()?.text()?.also { statusText ->
+            document.select("div.full-list-info:contains(الحالة) > small > a")?.first()!!.text()?.also { statusText ->
                 when {
                     statusText.contains("مستمرة", true) -> status = SManga.ONGOING
                     statusText.contains("مكتملة", true) -> status = SManga.COMPLETED
@@ -190,7 +190,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href"))
             name = element.select("div.epl-title").text()
-            date_upload = element.select("div.epl-date").first()?.text()?.let { parseChapterDate(it) } ?: 0
+            date_upload = element.select("div.epl-date").first()!!.text()?.let { parseChapterDate(it) } ?: 0
             val epNum = getNumberFromEpsString(element.select("div.epl-num").text())
             chapter_number = when {
                 (epNum.isNotEmpty()) -> epNum.toFloat()
