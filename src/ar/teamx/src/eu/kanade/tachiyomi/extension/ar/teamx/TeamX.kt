@@ -118,6 +118,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
                             .filter { it.state != Filter.TriState.STATE_IGNORE }
                             .forEach { url.addQueryParameter("genre", it.id) }
                     }
+                    else -> {}
                 }
             }
             GET(url.build().toString())
