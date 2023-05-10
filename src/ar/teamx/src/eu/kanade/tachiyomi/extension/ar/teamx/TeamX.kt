@@ -99,7 +99,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
             .build()
         return if (query.isNotBlank()) {
             GET("$baseUrl/ajax/search?keyword=$query", postHeaders)
-        } else (query.isBlank()) {
+        } else {
             val url = "$baseUrl/series?page=$page".toHttpUrlOrNull()!!.newBuilder()
             filters.forEach { filter ->
                 when (filter) {
