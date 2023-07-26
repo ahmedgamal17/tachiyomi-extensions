@@ -15,13 +15,19 @@ val PAGES_QUERY = buildQuery {
 }
 
 @Serializable
+data class ApiErrorMessages(
+    val message: String,
+)
+
+@Serializable
 data class ApiChapterPagesResponse(
-    val data: ApiChapterData,
+    val data: ApiChapterData?,
+    val errors: List<ApiErrorMessages>?,
 )
 
 @Serializable
 data class ApiChapterData(
-    val chapter: ApiChapter,
+    val chapter: ApiChapter?,
 )
 
 @Serializable

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -19,6 +20,11 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
     override val lang = "es"
 
     override val supportsLatest: Boolean = false
+
+    override fun headersBuilder(): Headers.Builder {
+        return Headers.Builder()
+            .add("Referer", "$baseUrl/")
+    }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
 
@@ -36,7 +42,7 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
         element.select("a.popimg").first()!!.let {
             setUrlWithoutDomain(it.attr("href"))
             title = it.select("img").attr("alt")
-            thumbnail_url = it.select("img").attr("abs:src").substringBefore("?")
+            thumbnail_url = it.select("img:not(noscript img)").attr("abs:data-src")
         }
     }
 
@@ -75,9 +81,9 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
     override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
 
-    protected open val pageListSelector = "div.wp-content p > img"
+    protected open val pageListSelector = "div.wp-content p > img:not(noscript img)"
     override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector)
-        .mapIndexed { i, img -> Page(i, "", img.attr("abs:src")) }
+        .mapIndexed { i, img -> Page(i, "", img.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
 

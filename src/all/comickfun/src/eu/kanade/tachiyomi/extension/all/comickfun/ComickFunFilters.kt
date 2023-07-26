@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.all.comickfun
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-internal fun getFilters(): FilterList {
+fun getFilters(): FilterList {
     return FilterList(
         Filter.Header(name = "NOTE: Everything below is ignored if using text search"),
         CompletedFilter("Completed translation"),
@@ -165,16 +165,19 @@ private val getTypeList: List<CheckBox> = listOf(
 
 private val getCreatedAtList: Array<Pair<String, String>> = arrayOf(
     Pair("", ""),
+    Pair("3 days", "3"),
+    Pair("7 days", "7"),
     Pair("30 days", "30"),
     Pair("3 months", "90"),
     Pair("6 months", "180"),
     Pair("1 year", "365"),
 )
 
-internal val getSortsList: Array<Pair<String, String>> = arrayOf(
+private val getSortsList: Array<Pair<String, String>> = arrayOf(
     Pair("Most popular", "follow"),
     Pair("Most follows", "user_follow_count"),
     Pair("Most views", "view"),
     Pair("High rating", "rating"),
     Pair("Last updated", "uploaded"),
+    Pair("Newest", "created_at"),
 )

@@ -19,7 +19,6 @@ class FoolSlideGenerator : ThemeSourceGenerator {
         SingleLang("Baixar Hentai", "https://leitura.baixarhentai.net", "pt-BR", isNsfw = true, overrideVersionCode = 4),
         SingleLang("Death Toll Scans", "https://reader.deathtollscans.net", "en"),
         SingleLang("Evil Flowers", "https://reader.evilflowers.com", "en", overrideVersionCode = 1),
-        SingleLang("Kirishima Fansub", "https://www.kirishimafansub.net", "es"),
         SingleLang("Le Cercle du Scan", "https://lel.lecercleduscan.com", "fr", className = "LeCercleDuScan", overrideVersionCode = 1),
         SingleLang("Lilyreader", "https://manga.smuglo.li", "en"),
         SingleLang("MangaScouts", "http://onlinereader.mangascouts.org", "de", overrideVersionCode = 1),
@@ -30,7 +29,6 @@ class FoolSlideGenerator : ThemeSourceGenerator {
         SingleLang("Rama", "https://www.ramareader.it", "it"),
         SingleLang("Silent Sky", "https://reader.silentsky-scans.net", "en"),
         SingleLang("Wanted Team", "https://reader.onepiecenakama.pl", "pl"),
-        SingleLang("Zandy no Fansub", "https://zandynofansub.aishiteru.org", "en"),
         SingleLang("Русификация", "https://rusmanga.ru", "ru", className = "Russification"),
     )
 

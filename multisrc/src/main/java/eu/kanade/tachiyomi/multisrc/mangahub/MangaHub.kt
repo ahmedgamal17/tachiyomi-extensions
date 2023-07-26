@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
+import eu.kanade.tachiyomi.lib.randomua.UserAgentType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -15,7 +17,10 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.Cookie
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -24,7 +29,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -39,8 +46,15 @@ abstract class MangaHub(
 
     override val supportsLatest = true
 
+    private var baseApiUrl = "https://api.mghubcdn.com"
+    private var baseCdnUrl = "https://imgx.mghubcdn.com"
+
     override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::uaIntercept)
+        .setRandomUserAgent(
+            userAgentType = UserAgentType.DESKTOP,
+            filterInclude = listOf("chrome"),
+        )
+        .addInterceptor(::apiAuthInterceptor)
         .rateLimit(1)
         .build()
 
@@ -56,36 +70,65 @@ abstract class MangaHub(
 
     open val json: Json by injectLazy()
 
-    private var baseApiUrl = "https://api.mghubcdn.com"
-    private var baseCdnUrl = "https://imgx.mghubcdn.com"
+    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
+        val originalRequest = chain.request()
 
-    private var userAgent: String? = null
-    private var checkedUa = false
+        val cookie = client.cookieJar
+            .loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }
 
-    private fun uaIntercept(chain: Interceptor.Chain): Response {
-        if (userAgent == null && !checkedUa) {
-            val uaResponse = chain.proceed(GET(UA_DB_URL))
-
-            if (uaResponse.isSuccessful) {
-                // only using desktop chromium-based browsers, apparently they refuse to load(403) if not chrome(ium)
-                val uaList = json.decodeFromString<Map<String, List<String>>>(uaResponse.body.string())
-                val chromeUserAgentString = uaList["desktop"]!!.filter { it.contains("chrome", ignoreCase = true) }
-                userAgent = chromeUserAgentString.random()
-                checkedUa = true
+        val request =
+            if (originalRequest.url.toString() == "$baseApiUrl/graphql" && cookie != null) {
+                originalRequest.newBuilder()
+                    .header("x-mhub-access", cookie.value)
+                    .build()
+            } else {
+                originalRequest
             }
 
-            uaResponse.close()
+        return chain.proceed(request)
+    }
+
+    private fun refreshApiKey(chapter: SChapter) {
+        val now = Calendar.getInstance().time.time
+
+        val slug = "$baseUrl${chapter.url}"
+            .toHttpUrlOrNull()
+            ?.pathSegments
+            ?.get(1)
+
+        val url = if (slug != null) {
+            "$baseUrl/manga/$slug".toHttpUrl()
+        } else {
+            baseUrl.toHttpUrl()
         }
 
-        if (userAgent != null) {
-            val newRequest = chain.request().newBuilder()
-                .header("User-Agent", userAgent!!)
-                .build()
+        // Clear key cookie
+        val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
+        client.cookieJar.saveFromResponse(url, listOf(cookie))
 
-            return chain.proceed(newRequest)
-        }
+        // Set required cookie (for cache busting?)
+        val recently = buildJsonObject {
+            putJsonObject((now - (0..3600).random()).toString()) {
+                put("mangaID", (1..42_000).random())
+                put("number", (1..20).random())
+            }
+        }.toString()
 
-        return chain.proceed(chain.request())
+        client.cookieJar.saveFromResponse(
+            url,
+            listOf(
+                Cookie.Builder()
+                    .domain(url.host)
+                    .name("recently")
+                    .value(URLEncoder.encode(recently, "utf-8"))
+                    .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
+                    .build(),
+            ),
+        )
+
+        val request = GET("$url?reloadKey=1", headers)
+        client.newCall(request).execute()
     }
 
     // popular
@@ -148,16 +191,16 @@ abstract class MangaHub(
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-            /*
-             * To remove duplicates we group by the thumbnail_url, which is
-             * common between duplicates. The duplicates have a suffix in the
-             * url "-by-{name}". Here we select the shortest url, to avoid
-             * removing manga that has "by" in the title already.
-             * Example:
-             * /manga/tales-of-demons-and-gods (kept)
-             * /manga/tales-of-demons-and-gods-by-mad-snail (removed)
-             * /manga/leveling-up-by-only-eating (kept)
-             */
+        /*
+         * To remove duplicates we group by the thumbnail_url, which is
+         * common between duplicates. The duplicates have a suffix in the
+         * url "-by-{name}". Here we select the shortest url, to avoid
+         * removing manga that has "by" in the title already.
+         * Example:
+         * /manga/tales-of-demons-and-gods (kept)
+         * /manga/tales-of-demons-and-gods-by-mad-snail (removed)
+         * /manga/leveling-up-by-only-eating (kept)
+         */
         val mangas = document.select(searchMangaSelector()).map { element ->
             searchMangaFromElement(element)
         }.groupBy { it.thumbnail_url }.mapValues { (_, values) ->
@@ -301,21 +344,53 @@ abstract class MangaHub(
             .toRequestBody()
 
         val newHeaders = headersBuilder()
+            .set("Accept", "application/json")
             .set("Content-Type", "application/json")
             .set("Origin", baseUrl)
+            .set("Sec-Fetch-Dest", "empty")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .removeAll("Upgrade-Insecure-Requests")
             .build()
 
         return POST("$baseApiUrl/graphql", newHeaders, body)
     }
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        super.fetchPageList(chapter)
+            .doOnError { refreshApiKey(chapter) }
+            .retry(1)
+
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException("Not used")
     override fun pageListParse(response: Response): List<Page> {
-        val pagesString = json.decodeFromString<ApiChapterPagesResponse>(response.body.string()).data.chapter.pages
-        val pages = json.decodeFromString<ApiChapterPages>(pagesString)
+        val chapterObject = json.decodeFromString<ApiChapterPagesResponse>(response.body.string())
+
+        if (chapterObject.data?.chapter == null) {
+            if (chapterObject.errors != null) {
+                val errors = chapterObject.errors.joinToString("\n") { it.message }
+                throw Exception(errors)
+            }
+            throw Exception("Unknown error while processing pages")
+        }
+
+        val pages = json.decodeFromString<ApiChapterPages>(chapterObject.data.chapter.pages)
 
         return pages.i.mapIndexed { i, page ->
             Page(i, "", "$baseCdnUrl/${pages.p}$page")
         }
+    }
+
+    // Image
+    override fun imageUrlRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .set("Sec-Fetch-Dest", "image")
+            .set("Sec-Fetch-Mode", "no-cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .removeAll("Upgrade-Insecure-Requests")
+            .build()
+
+        return GET(page.url, newHeaders)
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
@@ -415,8 +490,4 @@ abstract class MangaHub(
         Genre("Wuxia", "wuxia"),
         Genre("Yuri", "yuri"),
     )
-
-    companion object {
-        private const val UA_DB_URL = "https://tachiyomiorg.github.io/user-agents/user-agents.json"
-    }
 }
