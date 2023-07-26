@@ -5,6 +5,7 @@
 - ColaManhua (COLA漫画) https://github.com/tachiyomiorg/tachiyomi-extensions/pull/11445
 - Comikey https://github.com/tachiyomiorg/tachiyomi-extensions/pull/11971
 - CopyManga (拷贝漫画) https://github.com/tachiyomiorg/tachiyomi-extensions/pull/12376
+- Cứu Truyện https://github.com/tachiyomiorg/tachiyomi-extensions/pull/16654
 - Hentai Kai https://github.com/tachiyomiorg/tachiyomi-extensions/issues/9999
 - Hitomi.la https://github.com/tachiyomiorg/tachiyomi-extensions/pull/11613
 - HQ Dragon https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7065
@@ -18,8 +19,9 @@
 - ManhuaScan https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7129
 - ManhwaHot https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7129
 - Neox Scanlator https://github.com/tachiyomiorg/tachiyomi-extensions/pull/12695
+- Reaper Scans (EN) https://github.com/tachiyomiorg/tachiyomi-extensions/pull/16819
 - SuperMangás and SuperHentais https://github.com/tachiyomiorg/tachiyomi-extensions/pull/6348
-- TopToon+ https://github.com/tachiyomiorg/tachiyomi-extensions/pull/10851
+- TopToon+/Day Comics https://github.com/tachiyomiorg/tachiyomi-extensions/pull/10851
 - Tsuki Mangás https://github.com/tachiyomiorg/tachiyomi-extensions/pull/8609
 - Union Mangás https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7065
 - YES Mangás https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7065
@@ -28,8 +30,6 @@
 
 - ARES Manga https://github.com/tachiyomiorg/tachiyomi-extensions/issues/15396
 - Astra Scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/13845
-- Coven Scan https://github.com/tachiyomiorg/tachiyomi-extensions/issues/14499
-- Dragontea https://github.com/tachiyomiorg/tachiyomi-extensions/issues/10103
 - Gourmet Scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/6192
 - Hikari Scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/6611
 - Hunter Scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/12392
@@ -37,9 +37,8 @@
 - Knightnoscanlation https://github.com/tachiyomiorg/tachiyomi-extensions/issues/4240
 - KomikTap/KomikTap.in https://github.com/tachiyomiorg/tachiyomi-extensions/issues/6133
 - Luminous Scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/9923
-- Mangagecesi https://github.com/tachiyomiorg/tachiyomi-extensions/issues/5367
-- Manganoon https://github.com/tachiyomiorg/tachiyomi-extensions/issues/13866
 - MangaPro https://github.com/tachiyomiorg/tachiyomi-extensions/issues/13989
+- MangaSY https://github.com/tachiyomiorg/tachiyomi-extensions/issues/12007
 - Mangawow https://github.com/tachiyomiorg/tachiyomi-extensions/issues/5367
 - MHScans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/15319
 - NarTag https://github.com/tachiyomiorg/tachiyomi-extensions/issues/8038
@@ -49,4 +48,3 @@
 - SetsuScans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/11040
 - ShinobiScans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/14457
 - XXX Yaoi https://github.com/tachiyomiorg/tachiyomi-extensions/issues/9535
-- Yaoi Fan Clube https://github.com/tachiyomiorg/tachiyomi-extensions/issues/9605

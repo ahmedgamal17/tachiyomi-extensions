@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatusDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.TagAttributesDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.TagDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.UnknownEntity
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserAttributes
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserDto
 import eu.kanade.tachiyomi.network.GET
@@ -68,6 +69,7 @@ class MangaDexHelper(lang: String) {
                 subclass(ScanlationGroupDto::class)
                 subclass(TagDto::class)
                 subclass(UserDto::class)
+                defaultDeserializer { UnknownEntity.serializer() }
             }
 
             polymorphic(AttributesDto::class) {
@@ -292,6 +294,7 @@ class MangaDexHelper(lang: String) {
         firstVolumeCover: String?,
         lang: String,
         coverSuffix: String?,
+        altTitlesInDesc: Boolean,
     ): SManga {
         val attr = mangaDataDto.attributes!!
 
@@ -332,10 +335,24 @@ class MangaDexHelper(lang: String) {
 
         val genreList = MDConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        val desc = attr.description
+        var desc = (attr.description[lang] ?: attr.description["en"])?.removeEntitiesAndMarkdown() ?: ""
+
+        if (altTitlesInDesc) {
+            val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage] ?: ""
+            val altTitles = attr.altTitles
+                .filter { it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
+                .mapNotNull { it.values.singleOrNull() }
+                .filter(String::isNotEmpty)
+
+            if (altTitles.isNotEmpty()) {
+                val altTitlesDesc = altTitles
+                    .joinToString("\n", "${intl.altTitleText}\n") { "• $it" }
+                desc += (if (desc.isNullOrBlank()) "" else "\n\n") + altTitlesDesc.removeEntitiesAndMarkdown()
+            }
+        }
 
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang).apply {
-            description = (desc[lang] ?: desc["en"] ?: "").removeEntitiesAndMarkdown()
+            description = desc
             author = authors.joinToString(", ")
             artist = artists.joinToString(", ")
             status = getPublicationStatus(attr, chapters)

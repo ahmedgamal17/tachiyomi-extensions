@@ -7,12 +7,16 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.Headers
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
@@ -22,10 +26,9 @@ class MangaSwat : MangaThemesia(
     "MangaSwat",
     "https://swatmanga.net",
     "ar",
-    mangaUrlDirectory = "/manga",
-    dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US),
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
-    private val defaultBaseUrl = "https://swatmanga.net"
+    private val defaultBaseUrl = "https://swatop.club"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -40,6 +43,23 @@ class MangaSwat : MangaThemesia(
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val request = super.searchMangaRequest(page, query, filters)
+        if (query.isBlank()) return request
+
+        val url = request.url.newBuilder()
+            .removePathSegment(0)
+            .removeAllQueryParameters("title")
+            .addQueryParameter("s", query)
+            .build()
+
+        return request.newBuilder()
+            .url(url)
+            .build()
+    }
+
+    override fun searchMangaNextPageSelector() = "a[rel=next]"
+
     override val seriesArtistSelector = "span:contains(الناشر) i"
     override val seriesAuthorSelector = "span:contains(المؤلف) i"
     override val seriesGenreSelector = "span:contains(التصنيف) a, .mgen a"
@@ -53,6 +73,15 @@ class MangaSwat : MangaThemesia(
         val tsReader = json.decodeFromString<TSReader>(jsonString)
         val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()
         return imageUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+    }
+
+    override fun chapterListSelector() = "div.bxcl li, ul div:has(span.lchx)"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val urlElements = element.select("a")
+        setUrlWithoutDomain(urlElements.attr("href"))
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
+        date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
     }
 
     @Serializable

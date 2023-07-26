@@ -17,28 +17,24 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
-import java.util.concurrent.TimeUnit
 
 class KomikCast : MangaThemesia(
     "Komik Cast",
-    baseUrl = "https://komikcast.site",
+    baseUrl = "https://komikcast.io",
     "id",
     mangaUrlDirectory = "/daftar-komik",
 ) {
     // Formerly "Komik Cast (WP Manga Stream)"
     override val id = 972717448578983812
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
         .add("Accept-language", "en-US,en;q=0.9,id;q=0.8")
         .add("Referer", baseUrl)
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:25.0) Gecko/20100101 Firefox/25.0")
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -77,7 +73,7 @@ class KomikCast : MangaThemesia(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum")!!.text().ifBlank { urlElements.first()!!.text() }
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
         date_upload = parseChapterDate2(element.select(".chapter-link-time").text())
     }
 

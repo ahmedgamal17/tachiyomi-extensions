@@ -27,7 +27,7 @@ import java.util.Locale
 
 class HentaiVN : ParsedHttpSource() {
 
-    override val baseUrl = "https://hentaivn.site"
+    override val baseUrl = "https://hentaivn.tv"
     override val lang = "vi"
     override val name = "HentaiVN"
     override val supportsLatest = true
@@ -48,7 +48,7 @@ class HentaiVN : ParsedHttpSource() {
                 else -> chain.proceed(originalRequest)
             }
         }
-        .rateLimit(3)
+        .rateLimit(1)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -130,12 +130,18 @@ class HentaiVN : ParsedHttpSource() {
         status == null -> SManga.UNKNOWN
         status.contains("Đang tiến hành") -> SManga.ONGOING
         status.contains("Đã hoàn thành") -> SManga.COMPLETED
+        status.contains("Tạm ngưng") -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
     // Pages
+    override fun pageListRequest(chapter: SChapter): Request {
+        val mangaId = chapter.url.substringAfterLast("/").substringBefore('-')
+        val mangaEP = chapter.url.substringAfter("-").substringBefore("-")
+        return GET("$baseUrl/list-loadchapter.php?id_episode=$mangaEP&idchapshowz=$mangaId", headers)
+    }
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#image > img").mapIndexed { i, e ->
+        return document.select("img").mapIndexed { i, e ->
             Page(i, imageUrl = e.attr("abs:src"))
         }
     }
@@ -284,7 +290,7 @@ class HentaiVN : ParsedHttpSource() {
     )
 
     // jQuery.makeArray($('#container > div > div > div.box-box.textbox > form > ul:nth-child(7) > li').map((i, e) => `Genre("${e.textContent}", "${e.children[0].value}")`)).join(',\n')
-    // https://hentaivn.net/forum/search-plus.php
+    // https://hentaivn.autos/forum/search-plus.php
     private fun getGenreList() = listOf(
         Genre("3D Hentai", "3"),
         Genre("Action", "5"),
@@ -459,7 +465,7 @@ class HentaiVN : ParsedHttpSource() {
     )
 
     // jQuery.makeArray($('#container > div > div > div.box-box.textbox > form > ul:nth-child(8) > li').map((i, e) => `TransGroup("${e.textContent}", "${e.children[0].value}")`)).join(',\n')
-    // https://hentaivn.net/forum/search-plus.php
+    // https://hentaivn.autos/forum/search-plus.php
     private fun getGroupList() = arrayOf(
         TransGroup("Tất cả", "0"),
         TransGroup("Đang cập nhật", "1"),

@@ -267,6 +267,17 @@ class MangaDexIntl(lang: String) {
                 "Enter as a Comma-separated list of uploader UUIDs"
     }
 
+    val altTitlesInDesc: String = when (availableLang) {
+        BRAZILIAN_PORTUGUESE, PORTUGUESE -> "Títulos alternativos na descrição"
+        else -> "Alternative titles in description"
+    }
+
+    val altTitlesInDescSummary: String = when (availableLang) {
+        BRAZILIAN_PORTUGUESE, PORTUGUESE ->
+            "Inclui os títulos alternativos das séries no final de cada descrição"
+        else -> "Include a manga's alternative titles at the end of its description"
+    }
+
     val tryUsingFirstVolumeCover: String = when (availableLang) {
         BRAZILIAN_PORTUGUESE, PORTUGUESE -> "Tentar usar a capa do primeiro volume como capa"
         else -> "Attempt to use the first volume cover as cover"
@@ -1006,6 +1017,11 @@ class MangaDexIntl(lang: String) {
         SPANISH_LATAM, SPANISH -> "Sin grupo"
         RUSSIAN -> "Нет группы"
         else -> "No Group"
+    }
+
+    val altTitleText: String = when (availableLang) {
+        BRAZILIAN_PORTUGUESE, PORTUGUESE -> "Títulos alternativos:"
+        else -> "Alternative titles:"
     }
 
     companion object {
