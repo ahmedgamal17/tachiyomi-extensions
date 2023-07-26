@@ -75,12 +75,12 @@ class MangaSwat : MangaThemesia(
         return imageUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    override fun chapterListSelector() = "div.bxcl li, ul div:has(span.lchx)"
+    override fun chapterListSelector() = "div.bxcl ul li, ul div:has(span.lchx)"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
+        name = element.select(".lchx a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
         date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
     }
 
