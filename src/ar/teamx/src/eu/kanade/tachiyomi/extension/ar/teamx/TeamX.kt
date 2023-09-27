@@ -31,7 +31,7 @@ class TeamX : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "TeamX"
 
-    private val defaultBaseUrl = "https://teamxnovel.com"
+    private val defaultBaseUrl = "https://team1x12.com"
 
     private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
 

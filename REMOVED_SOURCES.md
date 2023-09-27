@@ -1,14 +1,25 @@
+**There is no timetable on when or if a source request may be filled (also applies to bug reports and enhancement requests).**
+
+### In General the following sources that won't be added as an extension
+- In general heavily paywalled sites
+- Sources that require cracking some app's source code (realistically, no one's going to put in the effort to do it)
+- Sources that are known for filling a lot of DMCA complaints over repositories on GitHub
+
+Here is a list of known sources that were removed.
 ## Removed sources
 
 ### Too difficult to maintain
 
+- Bakai https://github.com/tachiyomiorg/tachiyomi-extensions/pull/17890
 - ColaManhua (COLA漫画) https://github.com/tachiyomiorg/tachiyomi-extensions/pull/11445
 - Comikey https://github.com/tachiyomiorg/tachiyomi-extensions/pull/11971
+- Constellar Scans https://github.com/tachiyomiorg/tachiyomi-extensions/pull/17277
 - CopyManga (拷贝漫画) https://github.com/tachiyomiorg/tachiyomi-extensions/pull/12376
 - Cứu Truyện https://github.com/tachiyomiorg/tachiyomi-extensions/pull/16654
 - Hentai Kai https://github.com/tachiyomiorg/tachiyomi-extensions/issues/9999
 - Hitomi.la https://github.com/tachiyomiorg/tachiyomi-extensions/pull/11613
 - HQ Dragon https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7065
+- Japscan https://github.com/tachiyomiorg/tachiyomi-extensions/pull/17892
 - Koushoku https://github.com/tachiyomiorg/tachiyomi-extensions/pull/13329
 - LeerCapitulo https://github.com/tachiyomiorg/tachiyomi-extensions/pull/16255
 - Mangá Host https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7065
@@ -18,6 +29,7 @@
 - MangaYabu! https://github.com/tachiyomiorg/tachiyomi-extensions/pull/9336
 - ManhuaScan https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7129
 - ManhwaHot https://github.com/tachiyomiorg/tachiyomi-extensions/pull/7129
+- Mode Scanlator https://github.com/tachiyomiorg/tachiyomi-extensions/pull/17865
 - Neox Scanlator https://github.com/tachiyomiorg/tachiyomi-extensions/pull/12695
 - Reaper Scans (EN) https://github.com/tachiyomiorg/tachiyomi-extensions/pull/16819
 - SuperMangás and SuperHentais https://github.com/tachiyomiorg/tachiyomi-extensions/pull/6348
@@ -41,6 +53,7 @@
 - MangaSY https://github.com/tachiyomiorg/tachiyomi-extensions/issues/12007
 - Mangawow https://github.com/tachiyomiorg/tachiyomi-extensions/issues/5367
 - MHScans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/15319
+- Mono Manga https://github.com/tachiyomiorg/tachiyomi-extensions/issues/17634
 - NarTag https://github.com/tachiyomiorg/tachiyomi-extensions/issues/8038
 - Plot-twistnf-scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/4242
 - Realm Scans https://github.com/tachiyomiorg/tachiyomi-extensions/issues/15586
