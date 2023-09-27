@@ -1,41 +1,74 @@
 package eu.kanade.tachiyomi.extension.pt.goldenmangas
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_CUSTOM_UA
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
+import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_ENTRIES
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class GoldenMangas : ParsedHttpSource() {
+class GoldenMangas : ParsedHttpSource(), ConfigurableSource {
 
     // Hardcode the id because the language wasn't specific.
     override val id: Long = 6858719406079923084
 
     override val name = "Golden Mangás"
 
-    override val baseUrl = "https://goldenmanga.top"
+    override val baseUrl = "https://www.goldenmanga.top"
 
     override val lang = "pt-BR"
 
     override val supportsLatest = true
 
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private val baseHttpUrl: HttpUrl
+        get() = preferences.baseUrl.toHttpUrl()
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(1, TimeUnit.MINUTES)
         .writeTimeout(1, TimeUnit.MINUTES)
-        .rateLimit(1, 3, TimeUnit.SECONDS)
+        .addInterceptor(ObsoleteExtensionInterceptor())
+        .setRandomUserAgent(
+            userAgentType = preferences.getPrefUAType(),
+            customUA = preferences.getPrefCustomUA(),
+        )
+        .rateLimitPath("/mangas", 1, 8.seconds)
+        .rateLimitPath("/mm-admin/uploads", 1, 8.seconds)
+        .rateLimitPath("/timthumb.php", 1, 3.seconds)
+        .rateLimitPath("/index.php", 1, 3.seconds)
+        .addInterceptor(::guessNewUrlIntercept)
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -45,7 +78,7 @@ class GoldenMangas : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String = "div#maisLidos div.itemmanga"
+    override fun popularMangaSelector(): String = "div#maisLidos div.itemmanga:not(:contains(Avisos e Recados))"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h3")!!.text().withoutLanguage()
@@ -60,7 +93,7 @@ class GoldenMangas : ParsedHttpSource() {
         return GET("$baseUrl$path", headers)
     }
 
-    override fun latestUpdatesSelector() = "div.col-sm-12.atualizacao > div.row"
+    override fun latestUpdatesSelector() = "div.col-sm-12.atualizacao > div.row:not(:contains(Avisos e Recados))"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         val infoElement = element.selectFirst("div.col-sm-10.col-xs-8 h3")!!
@@ -100,7 +133,7 @@ class GoldenMangas : ParsedHttpSource() {
         val mangaResult = runCatching { super.mangaDetailsParse(response) }
         val manga = mangaResult.getOrNull()
 
-        if (manga?.title.isNullOrEmpty()) {
+        if (manga?.title.isNullOrEmpty() && !response.hasChangedDomain) {
             throw Exception(MIGRATE_WARNING)
         }
 
@@ -127,11 +160,11 @@ class GoldenMangas : ParsedHttpSource() {
         val chaptersResult = runCatching { super.chapterListParse(response) }
         val chapterList = chaptersResult.getOrNull()
 
-        if (chapterList.isNullOrEmpty()) {
+        if (chapterList.isNullOrEmpty() && !response.hasChangedDomain) {
             throw Exception(MIGRATE_WARNING)
         }
 
-        return chapterList
+        return chapterList.orEmpty()
     }
 
     override fun chapterListSelector() = "ul#capitulos li.row"
@@ -154,6 +187,17 @@ class GoldenMangas : ParsedHttpSource() {
         return GET(baseUrl + chapter.url, newHeaders)
     }
 
+    override fun pageListParse(response: Response): List<Page> {
+        val pagesResult = runCatching { super.pageListParse(response) }
+        val pageList = pagesResult.getOrNull()
+
+        if (pageList.isNullOrEmpty() && !response.hasChangedDomain) {
+            throw Exception(MIGRATE_WARNING)
+        }
+
+        return pageList.orEmpty()
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         val chapterImages = document.selectFirst("div.col-sm-12[id^='capitulos_images']:has(img[pag])")
 
@@ -163,11 +207,8 @@ class GoldenMangas : ParsedHttpSource() {
             throw Exception(CHAPTER_IS_NOVEL_ERROR)
         }
 
-        if (chapterImages == null) {
-            throw Exception(MIGRATE_WARNING)
-        }
-
-        return chapterImages.select("img[pag]")
+        return chapterImages?.select("img[pag]")
+            .orEmpty()
             .mapIndexed { i, element ->
                 Page(i, document.location(), element.attr("abs:src"))
             }
@@ -184,10 +225,79 @@ class GoldenMangas : ParsedHttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val uaPreference = ListPreference(screen.context).apply {
+            key = PREF_KEY_RANDOM_UA
+            title = "User Agent aleatório"
+            summary = "%s"
+            entries = arrayOf("Desativado", "Desktop", "Celular")
+            entryValues = RANDOM_UA_ENTRIES
+            setDefaultValue("off")
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_SHORT).show()
+                true
+            }
+        }
+
+        val customUaPreference = EditTextPreference(screen.context).apply {
+            key = PREF_KEY_CUSTOM_UA
+            title = "User Agent personalizado"
+            summary = "Deixe em branco para usar o User Agent padrão do aplicativo. " +
+                "Ignorado se User Agent aleatório está ativado."
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    Headers.Builder().add("User-Agent", newValue as String).build()
+                    Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_SHORT).show()
+                    true
+                } catch (e: IllegalArgumentException) {
+                    Toast.makeText(screen.context, "User Agent inválido: ${e.message}", Toast.LENGTH_LONG).show()
+                    false
+                }
+            }
+        }
+
+        screen.addPreference(uaPreference)
+        screen.addPreference(customUaPreference)
+    }
+
+    private fun guessNewUrlIntercept(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+
+        if (chain.request().url.host == "raw.githubusercontent.com") {
+            return response
+        }
+
+        if (response.hasChangedDomain && preferences.baseUrl == baseUrl) {
+            return response
+        }
+
+        preferences.baseUrl = "https://${response.request.url.host}"
+
+        val newUrl = chain.request().url.toString()
+            .replaceFirst(baseUrl, preferences.baseUrl)
+            .toHttpUrl()
+        val newRequest = chain.request().newBuilder()
+            .url(newUrl)
+            .build()
+
+        response.close()
+
+        return chain.proceed(newRequest)
+    }
+
+    private var SharedPreferences.baseUrl: String
+        get() = getString(BASE_URL_PREF, this@GoldenMangas.baseUrl)!!
+        set(newValue) = edit().putString(BASE_URL_PREF, newValue).apply()
+
     private fun String.toDate(): Long {
         return runCatching { DATE_FORMATTER.parse(trim())?.time }
             .getOrNull() ?: 0L
     }
+
+    private val Response.hasChangedDomain: Boolean
+        get() = request.url.host != baseHttpUrl.host &&
+            request.url.host.contains("goldenmang")
 
     private fun String.toStatus() = when (this) {
         "Ativo" -> SManga.ONGOING
@@ -216,5 +326,8 @@ class GoldenMangas : ParsedHttpSource() {
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("(dd/MM/yyyy)", Locale("pt", "BR"))
         }
+
+        private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações."
+        private const val BASE_URL_PREF = "base_url"
     }
 }
