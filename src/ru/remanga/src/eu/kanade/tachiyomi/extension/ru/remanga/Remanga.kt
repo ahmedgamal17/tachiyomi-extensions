@@ -381,13 +381,13 @@ class Remanga : ConfigurableSource, HttpSource() {
             thumbnail_url = baseUrl + img.high
             var altName = ""
             if (another_name.isNotEmpty()) {
-                altName = "Альтернативные названия:\n" + another_name + "\n\n"
+                altName = "Альтернативные названия:\n" + another_name + "\n"
             }
             val mediaNameLanguage = if (isEng.equals("rus")) en_name else rus_name
             this.description = "$mediaNameLanguage\n$ratingStar $ratingValue (голосов: $count_rating)\n$altName" +
-                o.description?.let { Jsoup.parseBodyFragment(it) }
-                    ?.select("p")
-                    ?.joinToString("\n") { it.text() }
+                o.description?.let { Jsoup.parse(it) }
+                    ?.select("body:not(:has(p)),p,br")
+                    ?.prepend("\\n")?.text()?.replace("\\n", "\n")?.replace("\n ", "\n")
                     .orEmpty()
             genre = (parseType(type) + ", " + parseAge(age_limit) + ", " + (genres + categories).joinToString { it.name }).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
             status = parseStatus(o.status.id)
@@ -440,6 +440,9 @@ class Remanga : ConfigurableSource, HttpSource() {
             val series = json.decodeFromJsonElement<MangaDetDto>(content)
             branches[series.dir] = series.branches
             mangaIDs[series.dir] = series.id
+            if (parseStatus(series.status.id) == SManga.LICENSED && series.branches.maxByOrNull { selector(it) }!!.count_chapters == 0) {
+                throw Exception("Лицензировано - Нет глав")
+            }
             series.branches
         } else {
             emptyList()
@@ -447,19 +450,16 @@ class Remanga : ConfigurableSource, HttpSource() {
     }
 
     private fun filterPaid(tempChaptersList: MutableList<SChapter>): MutableList<SChapter> {
-        val lastEx = tempChaptersList.find { it.scanlator.equals("exmanga") or it.url.contains("#is_bought") }
         return if (!preferences.getBoolean(PAID_PREF, false)) {
-            tempChaptersList.filter {
-                !it.name.contains("\uD83D\uDCB2") || if (lastEx != null) {
-                    (
-                        (
-                            it.name.substringBefore(
-                                ". Глава",
-                            ).toIntOrNull()!! <=
-                                (lastEx.name.substringBefore(". Глава").toIntOrNull()!!)
-                            ) &&
-                            (it.chapter_number < lastEx.chapter_number)
-                        )
+            val lastEx = tempChaptersList.find { !it.name.contains("\uD83D\uDCB2") }
+            tempChaptersList.filterNot {
+                it.name.contains("\uD83D\uDCB2") && if (lastEx != null) {
+                    val volCor = it.name.substringBefore(
+                        ". Глава",
+                    ).toIntOrNull()!!
+                    val volLast = lastEx.name.substringBefore(". Глава").toIntOrNull()!!
+                    (volCor > volLast) ||
+                        ((volCor == volLast) && (it.chapter_number > lastEx.chapter_number))
                 } else {
                     false
                 }

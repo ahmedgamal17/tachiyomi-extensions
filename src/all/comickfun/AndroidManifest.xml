@@ -13,14 +13,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="comick.app"
-                    android:pathPattern="/comic/.*/..*"
-                    android:scheme="https" />
-                <data
-                    android:host="comick.app"
-                    android:pathPattern="/comic/..*"
-                    android:scheme="https" />
+                <data android:scheme="https" />
+                <data android:host="comick.cc" />
+                <data android:host="comick.ink" />
+                <data android:host="comick.app" />
+                <data android:host="comick.fun" />
+                <data android:pathPattern="/comic/.*/..*" />
+                <data android:pathPattern="/comic/..*" />
             </intent-filter>
         </activity>
     </application>

@@ -18,6 +18,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.io.IOException
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -27,23 +28,42 @@ class MangaDemon : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
     override val name = "Manga Demon"
-    override val baseUrl = "https://manga-demon.org"
+    override val baseUrl = "https://demoncomics.org"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .removeAll("Accept-Encoding")
+                .build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
         .addInterceptor(::dynamicUrlInterceptor)
         .build()
 
-    private var dynamicUrlSuffix: String? = null
+    // Cache suffix
+    private var dynamicUrlSuffix = ""
+    private var dynamicUrlSuffixUpdated: Long = 0
+    private val dynamicUrlSuffixValidity: Long = 10 * 60 // 10 minutes
 
     private fun dynamicUrlInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val timeNow = System.currentTimeMillis() / 1000
 
         // Check if request requires an up-to-date suffix
-        if (request.url.pathSegments[0] == "manga" && dynamicUrlSuffix != null) {
+        if (request.url.pathSegments[0] == "manga") {
+            // Force update suffix if required
+            if (timeNow - dynamicUrlSuffixUpdated > dynamicUrlSuffixValidity) {
+                client.newCall(GET(baseUrl)).execute()
+                if (timeNow - dynamicUrlSuffixUpdated > dynamicUrlSuffixValidity) {
+                    throw IOException("Failed to update dynamic url suffix")
+                }
+            }
+
             val newPath = request.url
                 .encodedPath
-                .replaceAfterLast("-", dynamicUrlSuffix!!)
+                .replaceAfterLast("-", dynamicUrlSuffix)
 
             val newUrl = request.url.newBuilder()
                 .encodedPath(newPath)
@@ -56,12 +76,8 @@ class MangaDemon : ParsedHttpSource() {
             return chain.proceed(newRequest)
         }
 
+        // Always update suffix
         val response = chain.proceed(request)
-        if (dynamicUrlSuffix != null) {
-            return response
-        }
-
-        // Don't have suffix, get it from the page
         val document = Jsoup.parse(
             response.peekBody(Long.MAX_VALUE).string(),
             request.url.toString(),
@@ -77,6 +93,7 @@ class MangaDemon : ParsedHttpSource() {
 
         if (suffix != null) {
             dynamicUrlSuffix = suffix
+            dynamicUrlSuffixUpdated = timeNow
         }
 
         return response

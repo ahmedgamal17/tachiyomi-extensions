@@ -35,6 +35,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -66,6 +67,9 @@ abstract class MangaThemesia(
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
     }
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     open val projectPageString = "/project"
 
@@ -140,7 +144,7 @@ abstract class MangaThemesia(
             }
         }
         url.addPathSegment("")
-        return GET(url.toString())
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -205,7 +209,7 @@ abstract class MangaThemesia(
         }
     }
 
-    private fun String?.removeEmptyPlaceholder(): String? {
+    protected fun String?.removeEmptyPlaceholder(): String? {
         return if (this.isNullOrBlank() || this == "-" || this == "N/A") null else this
     }
 
@@ -263,9 +267,10 @@ abstract class MangaThemesia(
     open val pageSelector = "div#readerarea img"
 
     override fun pageListParse(document: Document): List<Page> {
+        val chapterUrl = document.location()
         val htmlPages = document.select(pageSelector)
             .filterNot { it.imgAttr().isEmpty() }
-            .mapIndexed { i, img -> Page(i, "", img.imgAttr()) }
+            .mapIndexed { i, img -> Page(i, chapterUrl, img.imgAttr()) }
 
         countViews(document)
 
@@ -280,10 +285,19 @@ abstract class MangaThemesia(
             emptyList()
         }
         val scriptPages = imageList.mapIndexed { i, jsonEl ->
-            Page(i, "", jsonEl.jsonPrimitive.content)
+            Page(i, chapterUrl, jsonEl.jsonPrimitive.content)
         }
 
         return scriptPages
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+            .set("Referer", page.url)
+            .build()
+
+        return GET(page.imageUrl!!, newHeaders)
     }
 
     /**

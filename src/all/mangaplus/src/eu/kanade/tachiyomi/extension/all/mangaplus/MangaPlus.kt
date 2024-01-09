@@ -81,6 +81,7 @@ class MangaPlus(
     override fun popularMangaRequest(page: Int): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/manga_list/hot")
+            .set("X-Page", page.toString())
             .build()
 
         return GET("$API_URL/title_list/ranking?format=json", newHeaders)
@@ -98,7 +99,13 @@ class MangaPlus(
 
         titleCache = titleList.associateBy(Title::titleId)
 
-        return MangasPage(titleList.map(Title::toSManga), hasNextPage = false)
+        val page = response.request.headers["X-Page"]!!.toInt()
+        val pageList = titleList
+            .drop((page - 1) * LISTING_ITEMS_PER_PAGE)
+            .take(LISTING_ITEMS_PER_PAGE)
+        val hasNextPage = (page + 1) * LISTING_ITEMS_PER_PAGE <= titleList.size
+
+        return MangasPage(pageList.map(Title::toSManga), hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -146,6 +153,7 @@ class MangaPlus(
 
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/manga_list/all")
+            .set("X-Page", page.toString())
             .build()
 
         val apiUrl = "$API_URL/title_list/allV2".toHttpUrl().newBuilder()
@@ -186,7 +194,7 @@ class MangaPlus(
 
                 titleResult.success.titleDetailView!!
                     .takeIf { it.title.language == langCode }
-                    ?.toSManga()
+                    ?.toSManga(intl)
             }
 
             return MangasPage(listOfNotNull(title), hasNextPage = false)
@@ -205,7 +213,13 @@ class MangaPlus(
                 title.author.orEmpty().contains(filter, ignoreCase = true)
         }
 
-        return MangasPage(searchResults.map(Title::toSManga), hasNextPage = false)
+        val page = response.request.headers["X-Page"]!!.toInt()
+        val pageList = searchResults
+            .drop((page - 1) * LISTING_ITEMS_PER_PAGE)
+            .take(LISTING_ITEMS_PER_PAGE)
+        val hasNextPage = (page + 1) * LISTING_ITEMS_PER_PAGE <= searchResults.size
+
+        return MangasPage(pageList.map(Title::toSManga), hasNextPage)
     }
 
     // Remove the '#' and map to the new url format used in website.
@@ -220,7 +234,7 @@ class MangaPlus(
             .set("Referer", "$baseUrl/titles/$titleId")
             .build()
 
-        return GET("$API_URL/title_detail?title_id=$titleId&format=json", newHeaders)
+        return GET("$API_URL/title_detailV3?title_id=$titleId&format=json", newHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -240,7 +254,7 @@ class MangaPlus(
             .takeIf { it.title.language == langCode }
             ?: throw Exception(intl["not_available"])
 
-        return titleDetails.toSManga()
+        return titleDetails.toSManga(intl)
     }
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
@@ -260,11 +274,10 @@ class MangaPlus(
 
         val titleDetailView = result.success.titleDetailView!!
 
-        val chapters = titleDetailView.firstChapterList + titleDetailView.lastChapterList
-
-        return chapters.reversed()
+        return titleDetailView.chapterList
             .filterNot(Chapter::isExpired)
             .map(Chapter::toSChapter)
+            .reversed()
     }
 
     // Remove the '#' and map to the new url format used in website.
@@ -414,7 +427,9 @@ class MangaPlus(
     companion object {
         private const val API_URL = "https://jumpg-webapi.tokyo-cdn.com/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+
+        private const val LISTING_ITEMS_PER_PAGE = 20
 
         private const val QUALITY_PREF_KEY = "imageResolution"
         private val QUALITY_PREF_ENTRY_VALUES = arrayOf("low", "high", "super_high")

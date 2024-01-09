@@ -36,6 +36,7 @@ data class HeanCmsSearchDto(
     fun toSManga(
         apiUrl: String,
         coverPath: String,
+        mangaSubDirectory: String,
         slugMap: Map<String, HeanCms.HeanCmsTitle>,
         slugStrategy: SlugStrategy,
     ): SManga = SManga.create().apply {
@@ -44,7 +45,7 @@ data class HeanCmsSearchDto(
         title = this@HeanCmsSearchDto.title
         thumbnail_url = thumbnail?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
             ?: thumbnailFileName?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
-        url = "/series/$slugOnly"
+        url = "/$mangaSubDirectory/$slugOnly"
     }
 }
 
@@ -67,6 +68,7 @@ data class HeanCmsSeriesDto(
     fun toSManga(
         apiUrl: String,
         coverPath: String,
+        mangaSubDirectory: String,
         slugStrategy: SlugStrategy,
     ): SManga = SManga.create().apply {
         val descriptionBody = this@HeanCmsSeriesDto.description?.let(Jsoup::parseBodyFragment)
@@ -85,9 +87,9 @@ data class HeanCmsSeriesDto(
             ?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
         status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
         url = if (slugStrategy != SlugStrategy.NONE) {
-            "/series/$slugOnly#$id"
+            "/$mangaSubDirectory/$slugOnly#$id"
         } else {
-            "/series/$slug"
+            "/$mangaSubDirectory/$slug"
         }
     }
 }
@@ -112,14 +114,23 @@ data class HeanCmsChapterDto(
 ) {
     fun toSChapter(
         seriesSlug: String,
+        mangaSubDirectory: String,
         dateFormat: SimpleDateFormat,
         slugStrategy: SlugStrategy,
     ): SChapter = SChapter.create().apply {
         val seriesSlugOnly = seriesSlug.toPermSlugIfNeeded(slugStrategy)
         name = this@HeanCmsChapterDto.name.trim()
+
+        if (price != 0) {
+            name += " \uD83D\uDD12"
+        }
+
         date_upload = runCatching { dateFormat.parse(createdAt)?.time }
             .getOrNull() ?: 0L
-        url = "/series/$seriesSlugOnly/$slug#$id"
+
+        val paidStatus = if (price != 0 && price != null) "-paid" else ""
+
+        url = "/$mangaSubDirectory/$seriesSlugOnly/$slug#$id$paidStatus"
     }
 }
 

@@ -6,6 +6,7 @@ ext {
     pkgNameSuffix = 'ar.teamx'
     extClass = '.TeamX'
     extVersionCode = 16
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
