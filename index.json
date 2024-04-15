@@ -17368,12 +17368,12 @@
   {
     "name": "Tachiyomi: Shooting Star Scans",
     "pkg": "eu.kanade.tachiyomi.extension.en.shootingstarscans",
-    "apk": "tachiyomi-en.shootingstarscans-v1.4.32.apk",
+    "apk": "tachiyomi-en.shootingstarscans-v1.4.30.apk",
     "lang": "en",
-    "code": 32,
-    "version": "1.4.32",
+    "code": 30,
+    "version": "1.4.30",
     "nsfw": 0,
-    "hasReadme": 0,
+    "hasReadme": 1,
     "hasChangelog": 0,
     "sources": [
       {
@@ -24762,7 +24762,7 @@
         "name": "ManaToki",
         "lang": "ko",
         "id": "2526381983439079467",
-        "baseUrl": "https://manatoki321.net",
+        "baseUrl": "https://manatoki333.net",
         "versionId": 1,
         "hasCloudflare": 1
       },
@@ -24770,7 +24770,7 @@
         "name": "NewToki",
         "lang": "ko",
         "id": "1977818283770282459",
-        "baseUrl": "https://newtoki321.com",
+        "baseUrl": "https://newtoki333.com",
         "versionId": 1,
         "hasCloudflare": 1
       }
@@ -29747,7 +29747,7 @@
         "name": "zero搬运网",
         "lang": "zh",
         "id": "8743284448117690086",
-        "baseUrl": "http://www.zerobywgbo2.com",
+        "baseUrl": "http://www.zerobywns.com",
         "versionId": 1,
         "hasCloudflare": 1
       }
