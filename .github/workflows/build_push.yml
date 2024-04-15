@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - test
     paths-ignore:
       - '**.md'
       - '.github/workflows/issue_moderator.yml'
