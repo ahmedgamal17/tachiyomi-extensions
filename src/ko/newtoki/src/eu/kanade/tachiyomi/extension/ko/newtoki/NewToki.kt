@@ -48,6 +48,9 @@ abstract class NewToki(
             .connectTimeout(10, TimeUnit.SECONDS) // fail fast
             .build()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     override fun popularMangaSelector() = "div#webtoon-list > ul > li"
 
     override fun popularMangaFromElement(element: Element): SManga {
@@ -179,7 +182,7 @@ abstract class NewToki(
     private fun mangaDetailsParseWithTitleCheck(manga: SManga, document: Document) =
         mangaDetailsParse(document).apply {
             // TODO: don't throw when there is download folder rename feature
-            if (manga.description.isNullOrEmpty() && manga.title != title) {
+            if (manga.description.isNullOrEmpty() && title.removeSuffix("…") !in manga.title) {
                 throw Exception(titleNotMatch(title))
             }
         }
@@ -258,7 +261,7 @@ abstract class NewToki(
     override fun latestUpdatesNextPageSelector() = ".pg_end"
 
     // We are able to get the image URL directly from the page list
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("This method should not be called!")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         getPreferencesInternal(screen.context).map(screen::addPreference)

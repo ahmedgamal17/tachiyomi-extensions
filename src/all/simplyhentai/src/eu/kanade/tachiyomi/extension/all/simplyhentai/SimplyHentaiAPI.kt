@@ -1,9 +1,17 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
 
+<<<<<<< HEAD
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class SHList<T>(val pagination: SHPagination, val data: List<T>)
+=======
+import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class SHList<T>(val pagination: SHPagination, val data: T)
+>>>>>>> remotes/keiyoushi/main
 
 @Serializable
 data class SHPagination(val next: Int?)
@@ -12,13 +20,27 @@ data class SHPagination(val next: Int?)
 data class SHWrapper(val `object`: SHObject)
 
 @Serializable
+<<<<<<< HEAD
+=======
+data class SHDataAlbum(val albums: List<SHObject>)
+
+@Serializable
+>>>>>>> remotes/keiyoushi/main
 data class SHObject(
     val preview: SHImage,
     val series: SHTag,
     val slug: String,
     val title: String,
 ) {
+<<<<<<< HEAD
     val path by lazy { "/${series.slug}/$slug" }
+=======
+    fun toSManga() = SManga.create().apply {
+        url = "/${series.slug}/$slug"
+        title = this@SHObject.title
+        thumbnail_url = preview.sizes.thumb
+    }
+>>>>>>> remotes/keiyoushi/main
 }
 
 @Serializable

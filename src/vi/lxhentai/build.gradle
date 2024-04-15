@@ -1,11 +1,7 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'LXHentai'
-    pkgNameSuffix = 'vi.lxhentai'
     extClass = '.LxHentai'
-    extVersionCode = 1
+    extVersionCode = 3
     isNsfw = true
 }
 

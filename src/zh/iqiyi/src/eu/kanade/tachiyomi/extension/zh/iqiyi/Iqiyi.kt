@@ -27,7 +27,7 @@ class Iqiyi : ParsedHttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/全部_0_9_$page/", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/全部_-1_-1_9_$page/", headers)
     override fun popularMangaNextPageSelector(): String = "div.mod-page > a.a1:contains(下一页)"
     override fun popularMangaSelector(): String = "ul.cartoon-hot-ul > li.cartoon-hot-list"
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -38,7 +38,7 @@ class Iqiyi : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/category/全部_0_4_$page/", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/category/全部_-1_-1_4_$page/", headers)
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -95,8 +95,8 @@ class Iqiyi : ParsedHttpSource() {
         }.reversed()
     }
 
-    override fun chapterListSelector(): String = throw Exception("Not Used")
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not Used")
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // Pages
 
@@ -113,5 +113,5 @@ class Iqiyi : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

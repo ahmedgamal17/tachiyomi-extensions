@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Manga Latino'
-    pkgNameSuffix = 'es.mangalatino'
     extClass = '.MangaLatino'
     extVersionCode = 1
     isNsfw = true

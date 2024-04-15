@@ -57,7 +57,7 @@ class Hentai2Read : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            thumbnail_url = element.select("img").attr("abs:data-src")
+            thumbnail_url = element.select("img").attr("abs:src")
             element.select("div.overlay-title a").let {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("href"))
@@ -143,7 +143,7 @@ class Hentai2Read : ParsedHttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -162,7 +162,7 @@ class Hentai2Read : ParsedHttpSource() {
         manga.genre = infoElement.select("li:contains(Category) > a, li:contains(Content) > a").joinToString(", ") { it.text() }
         manga.description = buildDescription(infoElement)
         manga.status = infoElement.select("li:contains(Status) > a").text().orEmpty().let { parseStatus(it) }
-        manga.thumbnail_url = document.select("a#js-linkNext > img").attr("src")
+        manga.thumbnail_url = document.select("a#js-linkNext img").attr("src")
         manga.title = document.select("h3.block-title > a").first()!!.ownText().trim()
         return manga
     }
@@ -260,9 +260,9 @@ class Hentai2Read : ParsedHttpSource() {
         return pages
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private class MangaNameSelect : Filter.Select<String>("Manga Name", arrayOf("Contains", "Starts With", "Ends With"))
     private class ArtistName : Filter.Text("Artist")

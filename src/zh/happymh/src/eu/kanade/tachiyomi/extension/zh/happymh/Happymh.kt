@@ -29,6 +29,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
+const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
+
 class Happymh : HttpSource(), ConfigurableSource {
     override val name: String = "嗨皮漫画"
     override val lang: String = "zh"
@@ -37,13 +39,20 @@ class Happymh : HttpSource(), ConfigurableSource {
     override val client: OkHttpClient = network.cloudflareClient
     private val json: Json by injectLazy()
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    init {
+        val oldUa = preferences.getString("userAgent", null)
+        if (oldUa != null) {
+            val editor = preferences.edit().remove("userAgent")
+            if (oldUa.isNotBlank()) editor.putString(PREF_KEY_CUSTOM_UA, oldUa)
+            editor.apply()
+        }
     }
 
     override fun headersBuilder(): Headers.Builder {
         val builder = super.headersBuilder()
-        val userAgent = preferences.getString(USER_AGENT_PREF, "")!!
+        val userAgent = preferences.getString(PREF_KEY_CUSTOM_UA, "")!!
         return if (userAgent.isNotBlank()) {
             builder.set("User-Agent", userAgent)
         } else {
@@ -86,9 +95,16 @@ class Happymh : HttpSource(), ConfigurableSource {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = FormBody.Builder().addEncoded("searchkey", query).build()
-        val header = headersBuilder().add("referer", "$baseUrl/sssearch").build()
-        return POST("$baseUrl/apis/m/ssearch", header, body)
+        val body = FormBody.Builder()
+            .addEncoded("searchkey", query)
+            .add("v", "v2.13")
+            .build()
+
+        val header = headersBuilder()
+            .add("referer", "$baseUrl/sssearch")
+            .build()
+
+        return POST("$baseUrl/v2.0/apis/manga/ssearch", header, body)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -143,19 +159,26 @@ class Happymh : HttpSource(), ConfigurableSource {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not Used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val header = headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, header)
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
         EditTextPreference(context).apply {
-            key = USER_AGENT_PREF
+            key = PREF_KEY_CUSTOM_UA
             title = "User Agent"
             summary = "留空则使用应用设置中的默认 User Agent，重启生效"
 
             setOnPreferenceChangeListener { _, newValue ->
                 try {
-                    Headers.Builder().add("User-Agent", newValue as String)
+                    Headers.headersOf("User-Agent", newValue as String)
                     true
                 } catch (e: Throwable) {
                     Toast.makeText(context, "User Agent 无效：${e.message}", Toast.LENGTH_LONG).show()
@@ -167,9 +190,5 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
-    }
-
-    companion object {
-        private const val USER_AGENT_PREF = "userAgent"
     }
 }

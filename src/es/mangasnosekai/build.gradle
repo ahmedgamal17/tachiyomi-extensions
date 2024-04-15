@@ -1,0 +1,13 @@
+ext {
+    extName = 'Mangas No Sekai'
+    extClass = '.MangasNoSekai'
+    themePkg = 'madara'
+    baseUrl = 'https://mangasnosekai.com'
+    overrideVersionCode = 14
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:synchrony"))
+}

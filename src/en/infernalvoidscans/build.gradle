@@ -1,0 +1,9 @@
+ext {
+    extName = 'Infernal Void Scans'
+    extClass = '.InfernalVoidScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://hivescans.com'
+    overrideVersionCode = 6
+}
+
+apply from: "$rootDir/common.gradle"

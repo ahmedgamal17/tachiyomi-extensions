@@ -1,0 +1,9 @@
+ext {
+    extName = 'FleksyScans'
+    extClass = '.FleksyScans'
+    themePkg = 'fuzzydoodle'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

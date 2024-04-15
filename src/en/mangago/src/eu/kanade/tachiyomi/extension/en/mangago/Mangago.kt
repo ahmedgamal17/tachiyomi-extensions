@@ -175,7 +175,8 @@ class Mangago : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val link = element.select("a.chico")
 
-        setUrlWithoutDomain(link.attr("href"))
+        val urlOriginal = link.attr("href")
+        if (urlOriginal.startsWith("http")) url = urlOriginal else setUrlWithoutDomain(urlOriginal)
         name = link.text().trim()
         date_upload = runCatching {
             dateFormat.parse(element.select("td:last-child").text().trim())?.time
@@ -242,8 +243,15 @@ class Mangago : ParsedHttpSource() {
             }
     }
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.startsWith("http")) {
+            return GET(chapter.url, headers)
+        }
+        return super.pageListRequest(chapter)
+    }
+
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Ignored if using text search"),

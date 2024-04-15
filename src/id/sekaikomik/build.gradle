@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sekaikomik'
+    extClass = '.Sekaikomik'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://sekaikomik.guru'
+    overrideVersionCode = 12
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

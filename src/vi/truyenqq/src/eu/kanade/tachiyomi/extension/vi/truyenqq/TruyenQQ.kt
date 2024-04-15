@@ -26,7 +26,7 @@ class TruyenQQ : ParsedHttpSource() {
 
     override val lang: String = "vi"
 
-    override val baseUrl: String = "https://truyenqqne.com/"
+    override val baseUrl: String = "https://truyenqqvn.com"
 
     override val supportsLatest: Boolean = true
 
@@ -141,7 +141,7 @@ class TruyenQQ : ParsedHttpSource() {
             }
 
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Không dùng chung với tìm kiếm bằng tên"),

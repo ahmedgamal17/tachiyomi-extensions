@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
@@ -8,6 +9,12 @@ ext {
     pkgNameSuffix = 'es.ikigaimangas'
     extClass = '.IkigaiMangas'
     extVersionCode = 1
+=======
+ext {
+    extName = 'Ikigai Mangas'
+    extClass = '.IkigaiMangas'
+    extVersionCode = 4
+>>>>>>> remotes/keiyoushi/main
     isNsfw = true
 }
 

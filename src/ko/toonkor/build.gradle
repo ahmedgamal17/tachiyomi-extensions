@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Toonkor'
-    pkgNameSuffix = 'ko.toonkor'
     extClass = '.Toonkor'
     extVersionCode = 4
 }

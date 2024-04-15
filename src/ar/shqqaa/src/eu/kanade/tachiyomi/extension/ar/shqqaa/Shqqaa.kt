@@ -67,6 +67,7 @@ class Shqqaa : ParsedHttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1)
         .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
 
+<<<<<<< HEAD
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Not used")
 
     override fun searchMangaSelector(): String = throw Exception("Not Used")
@@ -74,6 +75,15 @@ class Shqqaa : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga = throw Exception("Not Used")
 
     override fun searchMangaNextPageSelector() = throw Exception("Not Used")
+=======
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     // Manga summary page
     override fun mangaDetailsParse(document: Document): SManga {
@@ -118,7 +128,11 @@ class Shqqaa : ParsedHttpSource() {
         }
         return pages
     }
+<<<<<<< HEAD
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+=======
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun getFilterList() = FilterList()
 }

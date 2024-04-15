@@ -51,7 +51,11 @@ class Photos18 : HttpSource(), ConfigurableSource {
             SManga.create().apply {
                 url = link.attr("href").stripLang()
                 title = link.ownText()
+<<<<<<< HEAD
                 thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
+=======
+                thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img"))!!.attr("src")
+>>>>>>> remotes/keiyoushi/main
                 genre = cardBody.selectFirst(Evaluator.Tag("label"))!!.ownText()
                 status = SManga.COMPLETED
                 initialized = true
@@ -76,14 +80,22 @@ class Photos18 : HttpSource(), ConfigurableSource {
             if (filter is QueryFilter) filter.addQueryTo(url)
         }
 
+<<<<<<< HEAD
         return GET(url.toString(), headers)
+=======
+        return GET(url.build(), headers)
+>>>>>>> remotes/keiyoushi/main
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
+<<<<<<< HEAD
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException("Not used.")
+=======
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapter = SChapter.create().apply {
@@ -94,17 +106,29 @@ class Photos18 : HttpSource(), ConfigurableSource {
         return Observable.just(listOf(chapter))
     }
 
+<<<<<<< HEAD
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException("Not used.")
+=======
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val images = document.selectFirst(Evaluator.Id("content"))!!.select(Evaluator.Tag("img"))
         return images.mapIndexed { index, image ->
+<<<<<<< HEAD
             Page(index, imageUrl = image.attr("data-src"))
         }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+=======
+            Page(index, imageUrl = image.attr("src"))
+        }
+    }
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun getFilterList() = FilterList(
         SortFilter(),

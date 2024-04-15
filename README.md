@@ -1,37 +1,29 @@
-| Build | Support Server |
-|-------|---------|
-| [![CI](https://github.com/tachiyomiorg/tachiyomi-extensions/workflows/CI/badge.svg?event=push)](https://github.com/tachiyomiorg/tachiyomi-extensions/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/349436576037732353.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/tachiyomi) |
+### Please give the repo a :star:
 
-# ![app icon](./.github/readme-images/app-icon.png)Tachiyomi Extensions
-Tachiyomi is a free and open source manga reader for Android 6.0 and above.
-
-This repository contains the available extension catalogues for the [Tachiyomi](https://github.com/tachiyomiorg/tachiyomi) app.
+| Build                                                                                                                                                                               | Support Server                                                                                                                                              |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [![CI](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml/badge.svg)](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
 
 # Usage
 
-Extension sources can be downloaded, installed, and uninstalled via the main Tachiyomi app. They are installed and uninstalled like regular apps, in `.apk` format.
-
-## Downloads
-
-If you prefer to directly download the APK files, they are available via https://tachiyomi.org/extensions/ or directly in this GitHub repository in the [`repo` branch](https://github.com/tachiyomiorg/tachiyomi-extensions/tree/repo/apk).
+[Getting started](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo)
 
 # Requests
 
-To request a new source or bug fix, [create an issue](https://github.com/tachiyomiorg/tachiyomi-extensions/issues/new/choose).
+To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
 
-Note that requesting something does not imply that something will be added or fixed in a timely fashion or at all since the work is volunteer-based. Furthermore, some sources may be impossible to do or prohibitively difficult to maintain.
+Please note that creating an issue does not mean that the source will be added or fixed in a timely
+fashion, because the work is volunteer-based. Some sources may also be impossible to do or prohibitively
+difficult to maintain.
 
-If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing! Issues are up-for-grabs for any developer if there is no assigned user already.
+If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
+Issues are up-for-grabs for any developer if there is no assigned user already.
 
 # Contributing
 
 Contributions are welcome!
 
-Check out the repo's [issue backlog](https://github.com/tachiyomiorg/tachiyomi-extensions/issues) for source requests and bug reports.
-
-To get started with development, see [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-It might also be good to read our [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
+Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
 
 ## License
 
@@ -51,4 +43,8 @@ It might also be good to read our [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 
 ## Disclaimer
 
-The developer of this application does not have any affiliation with the content providers available.
+This project does not have any affiliation with the content providers available.
+
+This project is not affiliated with Mihon/Tachiyomi. Don't ask for help about these extensions at the
+official support means of Mihon/Tachiyomi. All credits to the codebase goes to the original contributors.
+

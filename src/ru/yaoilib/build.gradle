@@ -1,0 +1,10 @@
+ext {
+    extName = 'YaoiLib'
+    extClass = '.YaoiLib'
+    themePkg = 'libgroup'
+    baseUrl = 'https://v2.slashlib.me'
+    overrideVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

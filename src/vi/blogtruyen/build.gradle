@@ -1,12 +1,9 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'BlogTruyen'
-    pkgNameSuffix = 'vi.blogtruyen'
-    extClass = '.BlogTruyen'
-    extVersionCode = 17
-    isNsfw = true
+    extClass = '.BlogTruyenMoi'
+    themePkg = 'blogtruyen'
+    baseUrl = 'https://blogtruyenmoi.com'
+    overrideVersionCode = 17
 }
 
 apply from: "$rootDir/common.gradle"

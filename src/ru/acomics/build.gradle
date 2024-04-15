@@ -1,11 +1,8 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'AComics'
-    pkgNameSuffix = 'ru.acomics'
     extClass = '.AComics'
-    extVersionCode = 3
+    extVersionCode = 4
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

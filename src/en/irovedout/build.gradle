@@ -1,11 +1,7 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'I Roved Out'
-    pkgNameSuffix = 'en.irovedout'
     extClass = '.IRovedOut'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 

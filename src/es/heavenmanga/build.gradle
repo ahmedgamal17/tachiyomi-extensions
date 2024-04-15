@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
@@ -6,6 +7,12 @@ ext {
     pkgNameSuffix = 'es.heavenmanga'
     extClass = '.HeavenManga'
     extVersionCode = 6
+=======
+ext {
+    extName = 'HeavenManga'
+    extClass = '.HeavenManga'
+    extVersionCode = 7
+>>>>>>> remotes/keiyoushi/main
     isNsfw = true
 }
 

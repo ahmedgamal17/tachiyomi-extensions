@@ -1,8 +1,30 @@
 {
   "extends": [
-    "config:base"
+    "config:recommended"
   ],
+  "schedule": ["on sunday"],
   "includePaths": [
+    "buildSrc/gradle/**",
+    "gradle/**",
     ".github/**"
+  ],
+  "ignoreDeps": ["keiyoushi/issue-moderator-action"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "{{manager}} dependencies"
+    },
+    {
+      "matchManagers": ["gradle"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "gradle"
+      ],
+      "draftPR": true,
+      "enabled": true
+    }
   ]
 }

@@ -109,7 +109,7 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
 
     private inline fun HttpUrl.request(
         block: HttpUrl.Builder.() -> HttpUrl.Builder,
-    ) = GET(newBuilder().block().toString(), headers)
+    ) = GET(newBuilder().block().build(), headers)
 
     private inline val Response.date: Long
         get() = headers["Last-Modified"]?.run(httpDate::parse)?.time ?: 0L
@@ -118,13 +118,13 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
         get() = "/home/manga-reader/?manga=$title&view=multi"
 
     override fun chapterListSelector() =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     companion object {
         // Let's hope this doesn't change

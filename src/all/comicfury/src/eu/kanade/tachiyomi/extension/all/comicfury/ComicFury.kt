@@ -20,6 +20,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
@@ -31,10 +32,8 @@ class ComicFury(
     private val extraName: String = "",
 ) : HttpSource(), ConfigurableSource {
     override val baseUrl: String = "https://comicfury.com"
-    override val name: String = "Comic Fury$extraName" //Used for No Text
+    override val name: String = "Comic Fury$extraName" // Used for No Text
     override val supportsLatest: Boolean = true
-    private val dateFormat = SimpleDateFormat("dd MMM yyyy hh:mm aa", Locale.US)
-    private val dateFormatSlim = SimpleDateFormat("dd MMM yyyy", Locale.US)
 
     override val client = super.client.newBuilder().addInterceptor(TextInterceptor()).build()
 
@@ -69,35 +68,43 @@ class ComicFury(
      *  Chapter Number is handled as Chapter dot Comic. Ex. Chapter 6, Comic 4: chapter_number = 6.4
      *
      */
+    private val archiveSelector = "a:has(div.archive-chapter)"
+    private val chapterSelector = "a:has(div.archive-comic)"
+    private val nextArchivePageSelector = "#scroll-content > .onsite-viewer-back-link + .archive-pages a"
+    private lateinit var currentPage: org.jsoup.nodes.Document
+
+    private fun Element.toSManga(): SChapter {
+        return SChapter.create().apply {
+            setUrlWithoutDomain(this@toSManga.attr("abs:href"))
+            name = this@toSManga.select(".archive-comic-title").text()
+            date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
+        }
+    }
+
+    private fun collect(url: String): List<SChapter> {
+        return client.newCall(GET(url, headers)).execute().asJsoup()
+            .also { currentPage = it }
+            .select(chapterSelector)
+            .map { element -> element.toSManga() }
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsp = response.asJsoup()
-        if (jsp.selectFirst("div.archive-chapter") != null) {
-            val chapters: MutableList<SChapter> = arrayListOf()
-            for (chapter in jsp.select("div.archive-chapter").parents().reversed()) {
-                val name = chapter.text()
-                chapters.addAll(
-                    client.newCall(
-                        GET("$baseUrl${chapter.attr("href")}"),
-                    ).execute()
-                        .use { chapterListParse(it) }
-                        .mapIndexed { i, it ->
-                            it.apply {
-                                scanlator = name
-                                chapter_number += i
-                            }
-                        },
-                )
+
+        return if (jsp.selectFirst(archiveSelector) != null) {
+            val chapters = mutableListOf<SChapter>()
+            jsp.select(archiveSelector).eachAttr("abs:href").map { url ->
+                chapters.addAll(collect(url))
+                currentPage.select(nextArchivePageSelector).eachAttr("abs:href")
+                    .mapNotNull { nextUrl -> chapters.addAll(collect(nextUrl)) }
             }
-            return chapters
+            chapters
+                .mapIndexed { index, sChapter -> sChapter.apply { chapter_number = index.toFloat() } }
+                .reversed()
         } else {
-            return jsp.select("div.archive-comic").mapIndexed { i, it ->
-                SChapter.create().apply {
-                    url = it.parent()!!.attr("href")
-                    name = it.child(0).ownText()
-                    date_upload = it.child(1).ownText().toDate()
-                    chapter_number = "0.$i".toFloat()
-                }
-            }.toList().reversed()
+            jsp.select(chapterSelector).mapIndexed { i, element ->
+                element.toSManga().apply { chapter_number = "0.$i".toFloat() }
+            }.reversed()
         }
     }
 
@@ -122,9 +129,9 @@ class ComicFury(
                         response.request.url.toString(),
                         TextInterceptorHelper.createUrl(
                             jsp.selectFirst("a.is--comment-author")?.ownText()
-                                ?: "Error No Author For Comment Found",
-                            jsp.selectFirst("div.is--comment-content")?.html()
-                                ?: "Error No Comment Content Found",
+                                ?.let { "Author's Notes from $it" }
+                                .orEmpty(),
+                            jsp.selectFirst("div.is--comment-content")?.html().orEmpty(),
                         ),
                     ),
                 )
@@ -194,6 +201,8 @@ class ComicFury(
 
         return Request.Builder().url(req.build()).build()
     }
+
+    private fun Boolean.toInt(): Int = if (this) { 0 } else { 1 }
 
     // START OF AUTHOR NOTES //
     private val preferences: SharedPreferences by lazy {
@@ -276,16 +285,26 @@ class ComicFury(
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
+
+    // Date stuff
 
     private fun String.toDate(): Long {
-        val ret = this.replace("st", "")
-            .replace("nd", "")
-            .replace("rd", "")
-            .replace("th", "")
-            .replace(",", "")
-        return dateFormat.parse(ret)?.time ?: dateFormatSlim.parse(ret)!!.time
+        // remove st nd rd th (e.g. from 4th) but not from AuguST, and commas
+        val ret = this.replace(Regex("(?<=\\d)(st|nd|rd|th)|,"), "")
+
+        return when {
+            ret.contains(":") -> date[0].parseTime(ret)
+            this.matches(Regex("\\d{1,2}\\s?\\w{3,9}\\s?\\w{2,4}")) -> date[1].parseTime(ret)
+            this.matches(Regex("\\w{3,9}\\s?\\d{1,2}\\s?\\d{2,4}")) -> date[2].parseTime(ret)
+            else -> 0
+        }
     }
 
-    private fun Boolean.toInt(): Int = if (this) { 0 } else { 1 }
+    private val date = listOf("dd MMM yyyy hh:mm aa", "dd MMM yyyy", "MMM dd yyyy")
+        .map { SimpleDateFormat(it, Locale.US) }
+
+    private fun SimpleDateFormat.parseTime(string: String): Long {
+        return this.parse(string)?.time ?: 0
+    }
 }

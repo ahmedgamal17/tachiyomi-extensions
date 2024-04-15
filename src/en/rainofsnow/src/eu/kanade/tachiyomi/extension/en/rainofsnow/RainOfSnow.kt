@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -53,11 +53,11 @@ open class RainOfSnow() : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/".toHttpUrl().newBuilder()
             url.addQueryParameter("s", query)
-            return GET(url.build().toString(), headers)
+            return GET(url.build(), headers)
         }
-        val url = "$baseUrl/comics/".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/comics/".toHttpUrl().newBuilder()
         filters.forEach { filter ->
             when (filter) {
                 is AlbumTypeSelectFilter -> {
@@ -68,7 +68,7 @@ open class RainOfSnow() : ParsedHttpSource() {
                 else -> {}
             }
         }
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -159,9 +159,9 @@ open class RainOfSnow() : ParsedHttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    override fun latestUpdatesFromElement(element: Element) = throw Exception("Not used")
-    override fun latestUpdatesNextPageSelector() = throw Exception("Not used")
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not used")
-    override fun latestUpdatesSelector() = throw Exception("Not used")
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

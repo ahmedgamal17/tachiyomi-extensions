@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -21,7 +21,7 @@ class MangaRawClub : ParsedHttpSource() {
 
     override val id = 734865402529567092
     override val name = "MangaGeko"
-    override val baseUrl = "https://www.mangageko.com"
+    override val baseUrl = "https://www.mgeko.com"
     override val lang = "en"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -149,7 +149,7 @@ class MangaRawClub : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -158,7 +158,7 @@ class MangaRawClub : ParsedHttpSource() {
         }
 
         // Filter search
-        val url = "$baseUrl/browse-comics/".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/browse-comics/".toHttpUrl().newBuilder()
         val requestBody = FormBody.Builder()
         url.addQueryParameter("results", page.toString())
 
@@ -176,7 +176,7 @@ class MangaRawClub : ParsedHttpSource() {
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
         // return POST("$baseUrl/search", headers, requestBody.build()) // csrfmiddlewaretoken required
     }
 

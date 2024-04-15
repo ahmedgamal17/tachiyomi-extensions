@@ -1,0 +1,9 @@
+ext {
+    extName = 'Miau Scan'
+    extClass = '.MiauScanFactory'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://miauvisor.org'
+    overrideVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

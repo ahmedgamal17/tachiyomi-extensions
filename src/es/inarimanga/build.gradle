@@ -1,0 +1,10 @@
+ext {
+    extName = 'InariManga'
+    extClass = '.InariManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://rukavinari.org'
+    overrideVersionCode = 10
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

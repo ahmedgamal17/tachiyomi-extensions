@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Patch Friday'
-    pkgNameSuffix = 'en.patchfriday'
     extClass = '.PatchFriday'
     extVersionCode = 2
 }

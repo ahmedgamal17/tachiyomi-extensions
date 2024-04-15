@@ -1,12 +1,9 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
-
 ext {
     extName = 'Temple Scan'
-    pkgNameSuffix = 'es.templescanesp'
     extClass = '.TempleScanEsp'
-    extVersionCode = 33
+    themePkg = 'mangaesp'
+    baseUrl = 'https://templescanesp.net'
+    overrideVersionCode = 34
     isNsfw = true
 }
 

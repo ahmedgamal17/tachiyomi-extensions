@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Baozi Manhua'
-    pkgNameSuffix = 'zh.baozimanhua'
     extClass = '.Baozi'
     extVersionCode = 22
 }

@@ -77,10 +77,17 @@ class KingsOfDarkness : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
 
     override fun latestUpdatesRequest(page: Int) =
+<<<<<<< HEAD
         throw UnsupportedOperationException("Not used!")
 
     override fun latestUpdatesFromElement(element: Element) =
         throw UnsupportedOperationException("Not used!")
+=======
+        throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element) =
+        throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -89,6 +96,7 @@ class KingsOfDarkness : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String? = null
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+<<<<<<< HEAD
         throw UnsupportedOperationException("Not used!")
 
     override fun searchMangaFromElement(element: Element) =
@@ -96,4 +104,13 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) =
         throw UnsupportedOperationException("Not used!")
+=======
+        throw UnsupportedOperationException()
+
+    override fun searchMangaFromElement(element: Element) =
+        throw UnsupportedOperationException()
+
+    override fun imageUrlParse(document: Document) =
+        throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 }

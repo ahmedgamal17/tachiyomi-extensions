@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'MangaPill'
-    pkgNameSuffix = 'en.mangapill'
     extClass = '.MangaPill'
     extVersionCode = 8
     isNsfw = true

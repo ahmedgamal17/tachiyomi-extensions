@@ -1,11 +1,9 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'TuMangaOnline'
-    pkgNameSuffix = 'es.tumangaonline'
     extClass = '.TuMangaOnline'
-    extVersionCode = 46
+    themePkg = 'lectortmo'
+    baseUrl = 'https://visortmo.com'
+    overrideVersionCode = 49
     isNsfw = true
 }
 

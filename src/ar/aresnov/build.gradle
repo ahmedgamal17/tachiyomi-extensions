@@ -1,0 +1,9 @@
+ext {
+    extName = 'SCARManga'
+    extClass = '.ScarManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://scarmanga.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
@@ -5,6 +6,10 @@ apply plugin: 'kotlinx-serialization'
 ext {
     extName = 'InManga'
     pkgNameSuffix = 'es.inmanga'
+=======
+ext {
+    extName = 'InManga'
+>>>>>>> remotes/keiyoushi/main
     extClass = '.InManga'
     extVersionCode = 2
 }

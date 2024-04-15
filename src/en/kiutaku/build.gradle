@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Kiutaku'
-    pkgNameSuffix = 'en.kiutaku'
     extClass = '.Kiutaku'
     extVersionCode = 1
     isNsfw = true

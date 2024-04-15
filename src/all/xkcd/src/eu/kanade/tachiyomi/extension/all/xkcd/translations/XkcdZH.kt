@@ -60,5 +60,9 @@ class XkcdZH : Xkcd("https://xkcd.tw", "zh", "yyyy-MM-dd HH:mm:ss") {
     }
 
     override val chapterListSelector: String
+<<<<<<< HEAD
         get() = throw UnsupportedOperationException("Not used")
+=======
+        get() = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 }

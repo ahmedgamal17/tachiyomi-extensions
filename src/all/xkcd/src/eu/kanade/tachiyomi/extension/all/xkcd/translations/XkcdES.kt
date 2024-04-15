@@ -31,5 +31,9 @@ class XkcdES : Xkcd("https://es.xkcd.com", "es") {
         }
 
     override fun String.numbered(number: Any) =
+<<<<<<< HEAD
         throw UnsupportedOperationException("Not used")
+=======
+        throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 }

@@ -1,16 +1,11 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
-
 ext {
     extName = 'MANGA Plus by SHUEISHA'
-    pkgNameSuffix = 'all.mangaplus'
     extClass = '.MangaPlusFactory'
-    extVersionCode = 49
-}
-
-dependencies {
-    implementation(project(":lib-i18n"))
+    extVersionCode = 51
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:i18n"))
+}

@@ -8,6 +8,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
@@ -42,7 +43,7 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val defaultBaseUrl = "https://hentaivn.tv"
+    private val defaultBaseUrl = "https://henvn.tv"
     override val baseUrl by lazy { preferences.getString(PREF_KEY_BASE_URL, defaultBaseUrl)!! }
 
     override val name = "HentaiVN"
@@ -62,8 +63,9 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
 
         val domain = baseUrl.toHttpUrl().host
         baseClient.newBuilder()
-            .addNetworkInterceptor(CookieInterceptor(domain, "view1", "1"))
-            .addNetworkInterceptor(CookieInterceptor(domain, "view4", "1"))
+            .addNetworkInterceptor(
+                CookieInterceptor(domain, listOf("view1" to "1", "view4" to "1")),
+            )
             .setRandomUserAgent(
                 preferences.getPrefUAType(),
                 preferences.getPrefCustomUA(),
@@ -419,7 +421,7 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
     )
 
     // console.log(jQuery.makeArray($('ul.ul-search > li').map((i, e) => `Genre("${e.textContent}", "${e.children[0].value}")`)).join(',\n'))
-    // https://hentaivn.autos/forum/search-plus.php
+    // https://henvn.tv/forum/search-plus.php
     private fun getGenreList() = listOf(
         Genre("3D Hentai", "3"),
         Genre("Action", "5"),

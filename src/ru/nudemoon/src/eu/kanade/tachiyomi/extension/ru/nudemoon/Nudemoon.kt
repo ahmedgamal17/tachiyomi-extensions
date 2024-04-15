@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -16,12 +17,14 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 class Nudemoon : ParsedHttpSource() {
 
     override val name = "Nude-Moon"
 
-    override val baseUrl = "https://x.nude-moon.fun"
+    override val baseUrl = "https://a.nude-moon.fun"
 
     override val lang = "ru"
 
@@ -31,6 +34,11 @@ class Nudemoon : ParsedHttpSource() {
     private val dateParseSlash = SimpleDateFormat("d/MM/yyyy", Locale("ru"))
 
     private val cookieManager by lazy { CookieManager.getInstance() }
+
+    private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36")
+        .add("Referer", baseUrl)
 
     init {
         cookieManager.setCookie(baseUrl, "nm_mobile=1; Domain=" + baseUrl.split("//")[1])
@@ -48,7 +56,7 @@ class Nudemoon : ParsedHttpSource() {
             "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
         }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
             val newReq = chain
                 .request()
@@ -117,7 +125,7 @@ class Nudemoon : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
-        manga.thumbnail_url = element.select("img.news_pic2").attr("abs:src")
+        manga.thumbnail_url = element.select("a img").attr("abs:src")
         element.select("a:has(h2)").let {
             manga.title = it.text().substringBefore(" / ").substringBefore(" №")
             manga.setUrlWithoutDomain(it.attr("href"))
@@ -219,7 +227,7 @@ class Nudemoon : ParsedHttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
-        response.asJsoup().select("div.gallery-item img.textbox").mapIndexed { index, img ->
+        response.asJsoup().select("div.gallery-item img").mapIndexed { index, img ->
             add(Page(index, imageUrl = img.attr("abs:data-src")))
         }
         if (size == 0 && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
@@ -227,9 +235,9 @@ class Nudemoon : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("Not Used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
     private class Genre(name: String, val id: String = name.replace(' ', '_')) : Filter.CheckBox(name.replaceFirstChar { it.uppercaseChar() })
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)

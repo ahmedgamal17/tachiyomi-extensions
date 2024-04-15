@@ -1,0 +1,10 @@
+ext {
+    extName = 'Fleur Blanche'
+    extClass = '.FleurBlanche'
+    themePkg = 'madara'
+    baseUrl = 'https://fbsscan.com'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

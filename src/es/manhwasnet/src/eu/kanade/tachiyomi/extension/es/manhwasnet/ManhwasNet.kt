@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Cookie
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -46,14 +46,16 @@ class ManhwasNet : ParsedHttpSource() {
             chain.proceed(request.newBuilder().headers(clearHeaders).build())
         }
         if (response.headers["x-sucuri-cache"].isNullOrEmpty() && response.headers["x-sucuri-id"] != null && url.toString().startsWith(baseUrl)) {
-            val script = response.asJsoup().selectFirst("script")?.data()
+            val script = response.use { it.asJsoup() }.selectFirst("script")?.data()
             if (script != null) {
-                val a = script.split("(r)")[0].dropLast(1) + "r=r.replace('document.cookie','cookie');"
+                val patchedScript = script.split("(r)")[0].dropLast(1) + "r=r.replace('document.cookie','cookie');"
                 QuickJs.create().use {
-                    val b = it.evaluate(a) as String
-                    val sucuriCookie = it.evaluate(b.replace("location.", "").replace("reload();", "")) as String
-                    val cookieName = sucuriCookie.split("=")[0]
-                    val cookieValue = sucuriCookie.split("=")[1].replace(";path", "")
+                    val result = (it.evaluate(patchedScript) as String)
+                        .replace("location.", "")
+                        .replace("reload();", "")
+                    val sucuriCookie = (it.evaluate(result) as String).split("=", limit = 2)
+                    val cookieName = sucuriCookie.first()
+                    val cookieValue = sucuriCookie.last().replace(";path", "")
                     client.cookieJar.saveFromResponse(url, listOf(Cookie.parse(url, "$cookieName=$cookieValue")!!))
                 }
                 val newResponse = chain.proceed(request)
@@ -68,9 +70,9 @@ class ManhwasNet : ParsedHttpSource() {
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/biblioteca".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
         url.addQueryParameter("page", page.toString())
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun popularMangaSelector() = "ul > li > article.anime"
@@ -98,7 +100,7 @@ class ManhwasNet : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/biblioteca".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
         if (query.isNotEmpty()) {
             url.addQueryParameter("buscar", query)
         } else {
@@ -116,7 +118,7 @@ class ManhwasNet : ParsedHttpSource() {
             }
         }
         url.addQueryParameter("page", page.toString())
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -151,7 +153,7 @@ class ManhwasNet : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("Los filtros no se pueden combinar:"),

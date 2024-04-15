@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Kill Six Billion Demons'
-    pkgNameSuffix = 'en.killsixbilliondemons'
     extClass = '.KillSixBillionDemons'
     extVersionCode = 5
 }

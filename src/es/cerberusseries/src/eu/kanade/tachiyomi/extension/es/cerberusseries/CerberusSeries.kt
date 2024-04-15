@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.cerberusseries
 
+<<<<<<< HEAD
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -104,4 +105,15 @@ class CerberusSeries : ParsedHttpSource() {
     class WordSet(private vararg val words: String) {
         fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
     }
+=======
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+
+class CerberusSeries : MangaThemesia(
+    "Cerberus Series",
+    "https://cerberuseries.xyz",
+    "es",
+) {
+    // Moved from custom to MangaThemesia
+    override val versionId = 2
+>>>>>>> remotes/keiyoushi/main
 }

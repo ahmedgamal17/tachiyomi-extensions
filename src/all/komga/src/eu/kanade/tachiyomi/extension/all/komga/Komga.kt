@@ -2,13 +2,11 @@ package eu.kanade.tachiyomi.extension.all.komga
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.text.Editable
 import android.text.InputType
-import android.text.TextWatcher
 import android.util.Log
-import android.widget.Button
 import android.widget.Toast
-import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
@@ -20,7 +18,6 @@ import eu.kanade.tachiyomi.extension.all.komga.dto.PageWrapperDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.ReadListDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.SeriesDto
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
@@ -31,18 +28,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Credentials
 import okhttp3.Dns
-import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import rx.Single
-import rx.schedulers.Schedulers
+import org.apache.commons.text.StringSubstitutor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -50,336 +48,26 @@ import java.security.MessageDigest
 import java.util.Locale
 
 open class Komga(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/v1/series?page=${page - 1}&deleted=false&sort=metadata.titleSort,asc", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        processSeriesPage(response)
-
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/api/v1/series/latest?page=${page - 1}&deleted=false", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        processSeriesPage(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val collectionId = (filters.find { it is CollectionSelect } as? CollectionSelect)?.let {
-            it.values[it.state].id
-        }
-
-        val type = when {
-            collectionId != null -> "collections/$collectionId/series"
-            filters.find { it is TypeSelect }?.state == 1 -> "readlists"
-            else -> "series"
-        }
-
-        val url = "$baseUrl/api/v1/$type?search=$query&page=${page - 1}&deleted=false".toHttpUrlOrNull()!!.newBuilder()
-
-        filters.forEach { filter ->
-            when (filter) {
-                is UnreadFilter -> {
-                    if (filter.state) {
-                        url.addQueryParameter("read_status", "UNREAD")
-                        url.addQueryParameter("read_status", "IN_PROGRESS")
-                    }
-                }
-                is InProgressFilter -> {
-                    if (filter.state) {
-                        url.addQueryParameter("read_status", "IN_PROGRESS")
-                    }
-                }
-                is ReadFilter -> {
-                    if (filter.state) {
-                        url.addQueryParameter("read_status", "READ")
-                    }
-                }
-                is LibraryGroup -> {
-                    val libraryToInclude = mutableListOf<String>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            libraryToInclude.add(content.id)
-                        }
-                    }
-                    if (libraryToInclude.isNotEmpty()) {
-                        url.addQueryParameter("library_id", libraryToInclude.joinToString(","))
-                    }
-                }
-                is StatusGroup -> {
-                    val statusToInclude = mutableListOf<String>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            statusToInclude.add(content.name.uppercase(Locale.ROOT))
-                        }
-                    }
-                    if (statusToInclude.isNotEmpty()) {
-                        url.addQueryParameter("status", statusToInclude.joinToString(","))
-                    }
-                }
-                is GenreGroup -> {
-                    val genreToInclude = mutableListOf<String>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            genreToInclude.add(content.name)
-                        }
-                    }
-                    if (genreToInclude.isNotEmpty()) {
-                        url.addQueryParameter("genre", genreToInclude.joinToString(","))
-                    }
-                }
-                is TagGroup -> {
-                    val tagToInclude = mutableListOf<String>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            tagToInclude.add(content.name)
-                        }
-                    }
-                    if (tagToInclude.isNotEmpty()) {
-                        url.addQueryParameter("tag", tagToInclude.joinToString(","))
-                    }
-                }
-                is PublisherGroup -> {
-                    val publisherToInclude = mutableListOf<String>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            publisherToInclude.add(content.name)
-                        }
-                    }
-                    if (publisherToInclude.isNotEmpty()) {
-                        url.addQueryParameter("publisher", publisherToInclude.joinToString(","))
-                    }
-                }
-                is AuthorGroup -> {
-                    val authorToInclude = mutableListOf<AuthorDto>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            authorToInclude.add(content.author)
-                        }
-                    }
-                    authorToInclude.forEach {
-                        url.addQueryParameter("author", "${it.name},${it.role}")
-                    }
-                }
-                is Filter.Sort -> {
-                    var sortCriteria = when (filter.state?.index) {
-                        0 -> if (type == "series") "metadata.titleSort" else "name"
-                        1 -> "createdDate"
-                        2 -> "lastModifiedDate"
-                        else -> ""
-                    }
-                    if (sortCriteria.isNotEmpty()) {
-                        sortCriteria += "," + if (filter.state?.ascending!!) "asc" else "desc"
-                        url.addQueryParameter("sort", sortCriteria)
-                    }
-                }
-                else -> {}
-            }
-        }
-
-        return GET(url.toString(), headers)
+    internal val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        processSeriesPage(response)
+    private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(GET(manga.url, headers))
-            .asObservable()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
+    override val name by lazy {
+        val displayNameSuffix = displayName
+            .ifBlank { suffix }
+            .let { if (it.isNotBlank()) " ($it)" else "" }
+
+        "Komga$displayNameSuffix"
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(manga.url.replaceFirst("api/v1/", "", ignoreCase = true), headers)
+    override val lang = "all"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.body.use { body ->
-            if (response.fromReadList()) {
-                val readList = json.decodeFromString<ReadListDto>(body.string())
-                readList.toSManga()
-            } else {
-                val series = json.decodeFromString<SeriesDto>(body.string())
-                series.toSManga()
-            }
-        }
-    }
+    override val baseUrl by lazy { preferences.getString(PREF_ADDRESS, "")!!.removeSuffix("/") }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val responseBody = response.body
-        val page = responseBody.use { json.decodeFromString<PageWrapperDto<BookDto>>(it.string()).content }
-
-        val r = page.mapIndexed { index, book ->
-            SChapter.create().apply {
-                chapter_number = if (!response.fromReadList()) book.metadata.numberSort else index + 1F
-                name = "${if (!response.fromReadList()) "${book.metadata.number} - " else "${book.seriesTitle} ${book.metadata.number}: "}${book.metadata.title} (${book.size})"
-                url = "$baseUrl/api/v1/books/${book.id}"
-                scanlator = book.metadata.authors.groupBy({ it.role }, { it.name })["translator"]?.joinToString()
-                date_upload = book.metadata.releaseDate?.let { parseDate(it) }
-                    ?: parseDateTime(book.fileLastModified)
-            }
-        }
-        return r.sortedByDescending { it.chapter_number }
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET("${chapter.url}/pages")
-
-    override fun pageListParse(response: Response): List<Page> {
-        val responseBody = response.body
-        val pages = responseBody.use { json.decodeFromString<List<PageDto>>(it.string()) }
-        return pages.map {
-            val url = "${response.request.url}/${it.number}" +
-                if (!supportedImageTypes.contains(it.mediaType)) {
-                    "?convert=png"
-                } else {
-                    ""
-                }
-            Page(
-                index = it.number - 1,
-                imageUrl = url,
-            )
-        }
-    }
-
-    override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
-
-    override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
-
-    private fun processSeriesPage(response: Response): MangasPage {
-        val responseBody = response.body
-        return responseBody.use { body ->
-            if (response.fromReadList()) {
-                with(json.decodeFromString<PageWrapperDto<ReadListDto>>(body.string())) {
-                    MangasPage(content.map { it.toSManga() }, !last)
-                }
-            } else {
-                with(json.decodeFromString<PageWrapperDto<SeriesDto>>(body.string())) {
-                    MangasPage(content.map { it.toSManga() }, !last)
-                }
-            }
-        }
-    }
-
-    private fun SeriesDto.toSManga(): SManga =
-        SManga.create().apply {
-            title = metadata.title
-            url = "$baseUrl/api/v1/series/$id"
-            thumbnail_url = "$url/thumbnail"
-            status = when {
-                metadata.status == "ENDED" && metadata.totalBookCount != null && booksCount < metadata.totalBookCount -> SManga.PUBLISHING_FINISHED
-                metadata.status == "ENDED" -> SManga.COMPLETED
-                metadata.status == "ONGOING" -> SManga.ONGOING
-                metadata.status == "ABANDONED" -> SManga.CANCELLED
-                metadata.status == "HIATUS" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-            genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
-            description = metadata.summary.ifBlank { booksMetadata.summary }
-            booksMetadata.authors.groupBy { it.role }.let { map ->
-                author = map["writer"]?.map { it.name }?.distinct()?.joinToString()
-                artist = map["penciller"]?.map { it.name }?.distinct()?.joinToString()
-            }
-        }
-
-    private fun ReadListDto.toSManga(): SManga =
-        SManga.create().apply {
-            title = name
-            description = summary
-            url = "$baseUrl/api/v1/readlists/$id"
-            thumbnail_url = "$url/thumbnail"
-            status = SManga.UNKNOWN
-        }
-
-    private fun Response.fromReadList() = request.url.toString().contains("/api/v1/readlists")
-
-    private fun parseDate(date: String?): Long =
-        if (date == null) {
-            0
-        } else {
-            try {
-                KomgaHelper.formatterDate.parse(date)?.time ?: 0
-            } catch (ex: Exception) {
-                0
-            }
-        }
-
-    private fun parseDateTime(date: String?): Long =
-        if (date == null) {
-            0
-        } else {
-            try {
-                KomgaHelper.formatterDateTime.parse(date)?.time ?: 0
-            } catch (ex: Exception) {
-                try {
-                    KomgaHelper.formatterDateTimeMilli.parse(date)?.time ?: 0
-                } catch (ex: Exception) {
-                    0
-                }
-            }
-        }
-
-    override fun imageUrlParse(response: Response): String = ""
-
-    private class TypeSelect : Filter.Select<String>("Search for", arrayOf(TYPE_SERIES, TYPE_READLISTS))
-    private class LibraryFilter(val id: String, name: String) : Filter.CheckBox(name, false)
-    private class LibraryGroup(libraries: List<LibraryFilter>) : Filter.Group<LibraryFilter>("Libraries", libraries)
-    private class CollectionSelect(collections: List<CollectionFilterEntry>) : Filter.Select<CollectionFilterEntry>("Collection", collections.toTypedArray())
-    private class SeriesSort : Filter.Sort("Sort", arrayOf("Alphabetically", "Date added", "Date updated"), Selection(0, true))
-    private class StatusFilter(name: String) : Filter.CheckBox(name, false)
-    private class StatusGroup(filters: List<StatusFilter>) : Filter.Group<StatusFilter>("Status", filters)
-    private class UnreadFilter : Filter.CheckBox("Unread", false)
-    private class InProgressFilter : Filter.CheckBox("In Progress", false)
-    private class ReadFilter : Filter.CheckBox("Read", false)
-    private class GenreFilter(genre: String) : Filter.CheckBox(genre, false)
-    private class GenreGroup(genres: List<GenreFilter>) : Filter.Group<GenreFilter>("Genres", genres)
-    private class TagFilter(tag: String) : Filter.CheckBox(tag, false)
-    private class TagGroup(tags: List<TagFilter>) : Filter.Group<TagFilter>("Tags", tags)
-    private class PublisherFilter(publisher: String) : Filter.CheckBox(publisher, false)
-    private class PublisherGroup(publishers: List<PublisherFilter>) : Filter.Group<PublisherFilter>("Publishers", publishers)
-    private class AuthorFilter(val author: AuthorDto) : Filter.CheckBox(author.name, false)
-    private class AuthorGroup(role: String, authors: List<AuthorFilter>) : Filter.Group<AuthorFilter>(role, authors)
-
-    private data class CollectionFilterEntry(
-        val name: String,
-        val id: String? = null,
-    ) {
-        override fun toString() = name
-    }
-
-    override fun getFilterList(): FilterList {
-        val filters = try {
-            mutableListOf<Filter<*>>(
-                UnreadFilter(),
-                InProgressFilter(),
-                ReadFilter(),
-                TypeSelect(),
-                CollectionSelect(listOf(CollectionFilterEntry("None")) + collections.map { CollectionFilterEntry(it.name, it.id) }),
-                LibraryGroup(libraries.map { LibraryFilter(it.id, it.name) }.sortedBy { it.name.lowercase(Locale.ROOT) }),
-                StatusGroup(listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map { StatusFilter(it) }),
-                GenreGroup(genres.map { GenreFilter(it) }),
-                TagGroup(tags.map { TagFilter(it) }),
-                PublisherGroup(publishers.map { PublisherFilter(it) }),
-            ).also { list ->
-                list.addAll(authors.map { (role, authors) -> AuthorGroup(role, authors.map { AuthorFilter(it) }) })
-                list.add(SeriesSort())
-            }
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "error while creating filter list", e)
-            emptyList()
-        }
-
-        return FilterList(filters)
-    }
-
-    private var libraries = emptyList<LibraryDto>()
-    private var collections = emptyList<CollectionDto>()
-    private var genres = emptySet<String>()
-    private var tags = emptySet<String>()
-    private var publishers = emptySet<String>()
-    private var authors = emptyMap<String, List<AuthorDto>>() // roles to list of authors
+    override val supportsLatest = true
 
     // keep the previous ID when lang was "en", so that preferences and manga bindings are not lost
     override val id by lazy {
@@ -388,24 +76,17 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
     }
 
-    private val displayName by lazy { preferences.displayName }
-    final override val baseUrl by lazy { preferences.baseUrl }
-    private val username by lazy { preferences.username }
-    private val password by lazy { preferences.password }
+    private val username by lazy { preferences.getString(PREF_USERNAME, "")!! }
+
+    private val password by lazy { preferences.getString(PREF_PASSWORD, "")!! }
+
+    private val defaultLibraries
+        get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
+
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers.Builder()
-            .add("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    override val name = "Komga${displayName.ifBlank { suffix }.let { if (it.isNotBlank()) " ($it)" else "" }}"
-    override val lang = "all"
-    override val supportsLatest = true
-    private val LOG_TAG = "extension.all.komga${if (suffix.isNotBlank()) ".$suffix" else ""}"
+    override fun headersBuilder() = super.headersBuilder()
+        .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
 
     override val client: OkHttpClient =
         network.client.newBuilder()
@@ -421,217 +102,397 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             .dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
             .build()
 
+    override fun popularMangaRequest(page: Int): Request =
+        searchMangaRequest(
+            page,
+            "",
+            FilterList(
+                SeriesSort(Filter.Sort.Selection(1, true)),
+            ),
+        )
+
+    override fun popularMangaParse(response: Response): MangasPage =
+        processSeriesPage(response, baseUrl)
+
+    override fun latestUpdatesRequest(page: Int): Request =
+        searchMangaRequest(
+            page,
+            "",
+            FilterList(
+                SeriesSort(Filter.Sort.Selection(3, false)),
+            ),
+        )
+
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        processSeriesPage(response, baseUrl)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val collectionId = (filters.find { it is CollectionSelect } as? CollectionSelect)?.let {
+            it.collections[it.state].id
+        }
+
+        val type = when {
+            collectionId != null -> "collections/$collectionId/series"
+            filters.find { it is TypeSelect }?.state == 1 -> "readlists"
+            else -> "series"
+        }
+
+        val url = "$baseUrl/api/v1/$type?search=$query&page=${page - 1}&deleted=false".toHttpUrl().newBuilder()
+        val filterList = filters.ifEmpty { getFilterList() }
+        val defaultLibraries = defaultLibraries
+
+        if (filterList.filterIsInstance<LibraryFilter>().isEmpty() && defaultLibraries.isNotEmpty()) {
+            url.addQueryParameter("library_id", defaultLibraries.joinToString(","))
+        }
+
+        filterList.forEach { filter ->
+            when (filter) {
+                is UriFilter -> filter.addToUri(url)
+                is Filter.Sort -> {
+                    val state = filter.state ?: return@forEach
+
+                    val sortCriteria = when (state.index) {
+                        0 -> "relevance"
+                        1 -> if (type == "series") "metadata.titleSort" else "name"
+                        2 -> "createdDate"
+                        3 -> "lastModifiedDate"
+                        else -> return@forEach
+                    } + "," + if (state.ascending) "asc" else "desc"
+
+                    url.addQueryParameter("sort", sortCriteria)
+                }
+                else -> {}
+            }
+        }
+
+        return GET(url.build(), headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage =
+        processSeriesPage(response, baseUrl)
+
+    private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
+        val data = if (response.isFromReadList()) {
+            response.parseAs<PageWrapperDto<ReadListDto>>()
+        } else {
+            response.parseAs<PageWrapperDto<SeriesDto>>()
+        }
+
+        return MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+    }
+
+    override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
+
+    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        return if (response.isFromReadList()) {
+            response.parseAs<ReadListDto>().toSManga(baseUrl)
+        } else {
+            response.parseAs<SeriesDto>().toSManga(baseUrl)
+        }
+    }
+
+    private val chapterNameTemplate
+        get() = preferences.getString(PREF_CHAPTER_NAME_TEMPLATE, PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)!!
+
+    override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
+
+    override fun chapterListRequest(manga: SManga): Request =
+        GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val page = response.parseAs<PageWrapperDto<BookDto>>().content
+        val isFromReadList = response.isFromReadList()
+        val chapterNameTemplate = chapterNameTemplate
+
+        return page
+            .filter {
+                it.media.mediaProfile != "EPUB" || it.media.epubDivinaCompatible
+            }
+            .mapIndexed { index, book ->
+                SChapter.create().apply {
+                    chapter_number = if (!isFromReadList) book.metadata.numberSort else index + 1F
+                    url = "$baseUrl/api/v1/books/${book.id}"
+                    name = book.getChapterName(chapterNameTemplate, isFromReadList)
+                    scanlator = book.metadata.authors
+                        .filter { it.role == "translator" }
+                        .joinToString { it.name }
+                    date_upload = when {
+                        book.metadata.releaseDate != null -> parseDate(book.metadata.releaseDate)
+                        book.created != null -> parseDateTime(book.created)
+
+                        // XXX: `Book.fileLastModified` actually uses the server's running timezone,
+                        // not UTC, even if the timestamp ends with a Z! We cannot determine the
+                        // server's timezone, which is why this is a last resort option.
+                        else -> parseDateTime(book.fileLastModified)
+                    }
+                }
+            }
+            .sortedByDescending { it.chapter_number }
+    }
+
+    override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages")
+
+    override fun pageListParse(response: Response): List<Page> {
+        val pages = response.parseAs<List<PageDto>>()
+
+        return pages.map {
+            val url = "${response.request.url}/${it.number}" +
+                if (!SUPPORTED_IMAGE_TYPES.contains(it.mediaType)) {
+                    "?convert=png"
+                } else {
+                    ""
+                }
+
+            Page(it.number, imageUrl = url)
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun getFilterList(): FilterList {
+        fetchFilterOptions()
+
+        val filters = mutableListOf<Filter<*>>(
+            UnreadFilter(),
+            InProgressFilter(),
+            ReadFilter(),
+            TypeSelect(),
+            CollectionSelect(
+                buildList {
+                    add(CollectionFilterEntry("None"))
+                    collections.forEach {
+                        add(CollectionFilterEntry(it.name, it.id))
+                    }
+                },
+            ),
+            LibraryFilter(libraries, defaultLibraries),
+            UriMultiSelectFilter(
+                "Status",
+                "status",
+                listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map {
+                    UriMultiSelectOption(it, it.uppercase(Locale.ROOT))
+                },
+            ),
+            UriMultiSelectFilter(
+                "Genres",
+                "genre",
+                genres.map { UriMultiSelectOption(it) },
+            ),
+            UriMultiSelectFilter(
+                "Tags",
+                "tag",
+                tags.map { UriMultiSelectOption(it) },
+            ),
+            UriMultiSelectFilter(
+                "Publishers",
+                "publisher",
+                publishers.map { UriMultiSelectOption(it) },
+            ),
+        ).apply {
+            if (fetchFilterStatus != FetchFilterStatus.FETCHED) {
+                val message = if (fetchFilterStatus == FetchFilterStatus.NOT_FETCHED && fetchFiltersAttempts >= 3) {
+                    "Failed to fetch filtering options from the server"
+                } else {
+                    "Press 'Reset' to show filtering options"
+                }
+
+                add(0, Filter.Header(message))
+                add(1, Filter.Separator())
+            }
+
+            addAll(authors.map { (role, authors) -> AuthorGroup(role, authors.map { AuthorFilter(it) }) })
+            add(SeriesSort())
+        }
+
+        return FilterList(filters)
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        fetchFilterOptions()
+
+        if (suffix.isEmpty()) {
+            ListPreference(screen.context).apply {
+                key = PREF_EXTRA_SOURCES_COUNT
+                title = "Number of extra sources"
+                summary = "Number of additional sources to create. There will always be at least one Komga source."
+                entries = PREF_EXTRA_SOURCES_ENTRIES
+                entryValues = PREF_EXTRA_SOURCES_ENTRIES
+
+                setDefaultValue(PREF_EXTRA_SOURCES_DEFAULT)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.also(screen::addPreference)
+        }
+
         screen.addEditTextPreference(
             title = "Source display name",
             default = suffix,
             summary = displayName.ifBlank { "Here you can change the source displayed suffix" },
-            key = PREF_DISPLAYNAME,
+            key = PREF_DISPLAY_NAME,
+            restartRequired = true,
         )
         screen.addEditTextPreference(
             title = "Address",
-            default = ADDRESS_DEFAULT,
+            default = "",
             summary = baseUrl.ifBlank { "The server address" },
+            dialogMessage = "The address must not end with a forward slash.",
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
-            validate = { it.toHttpUrlOrNull() != null },
-            validationMessage = "The URL is invalid or malformed",
+            validate = { it.toHttpUrlOrNull() != null && !it.endsWith("/") },
+            validationMessage = "The URL is invalid, malformed, or ends with a slash",
             key = PREF_ADDRESS,
+            restartRequired = true,
         )
         screen.addEditTextPreference(
             title = "Username",
-            default = USERNAME_DEFAULT,
+            default = "",
             summary = username.ifBlank { "The user account email" },
             key = PREF_USERNAME,
+            restartRequired = true,
         )
         screen.addEditTextPreference(
             title = "Password",
-            default = PASSWORD_DEFAULT,
+            default = "",
             summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
             key = PREF_PASSWORD,
+            restartRequired = true,
+        )
+
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_DEFAULT_LIBRARIES
+            title = "Default libraries"
+            summary = buildString {
+                append("Show content from selected libraries by default.")
+
+                if (libraries.isEmpty()) {
+                    append(" Exit and enter the settings menu to load options.")
+                }
+            }
+            entries = libraries.map { it.name }.toTypedArray()
+            entryValues = libraries.map { it.id }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+        }.also(screen::addPreference)
+
+        val values = hashMapOf(
+            "title" to "",
+            "seriesTitle" to "",
+            "number" to "",
+            "createdDate" to "",
+            "releaseDate" to "",
+            "size" to "",
+            "sizeBytes" to "",
+        )
+        val stringSubstitutor = StringSubstitutor(values, "{", "}").apply {
+            isEnableUndefinedVariableException = true
+        }
+
+        screen.addEditTextPreference(
+            key = PREF_CHAPTER_NAME_TEMPLATE,
+            title = "Chapter title format",
+            summary = "Customize how chapter names appear. Chapters in read lists will always be prefixed by the series' name.",
+            inputType = InputType.TYPE_CLASS_TEXT,
+            default = PREF_CHAPTER_NAME_TEMPLATE_DEFAULT,
+            dialogMessage = """
+            |Supported placeholders:
+            |- {title}: Chapter name
+            |- {seriesTitle}: Series name
+            |- {number}: Chapter number
+            |- {createdDate}: Chapter creation date
+            |- {releaseDate}: Chapter release date
+            |- {size}: Chapter file size (formatted)
+            |- {sizeBytes}: Chapter file size (in bytes)
+            |If you wish to place some text between curly brackets, place the escape character "$"
+            |before the opening curly bracket, e.g. ${'$'}{series}.
+            """.trimMargin(),
+            validate = {
+                try {
+                    stringSubstitutor.replace(it)
+                    true
+                } catch (e: IllegalArgumentException) {
+                    false
+                }
+            },
+            validationMessage = "Invalid chapter title format",
         )
     }
 
-    private fun PreferenceScreen.addEditTextPreference(
-        title: String,
-        default: String,
-        summary: String,
-        inputType: Int? = null,
-        validate: ((String) -> Boolean)? = null,
-        validationMessage: String? = null,
-        key: String = title,
-    ) {
-        val preference = EditTextPreference(context).apply {
-            this.key = key
-            this.title = title
-            this.summary = summary
-            this.setDefaultValue(default)
-            dialogTitle = title
+    private var libraries = emptyList<LibraryDto>()
+    private var collections = emptyList<CollectionDto>()
+    private var genres = emptySet<String>()
+    private var tags = emptySet<String>()
+    private var publishers = emptySet<String>()
+    private var authors = emptyMap<String, List<AuthorDto>>() // roles to list of authors
 
-            setOnBindEditTextListener { editText ->
-                if (inputType != null) {
-                    editText.inputType = inputType
-                }
+    private var fetchFilterStatus = FetchFilterStatus.NOT_FETCHED
+    private var fetchFiltersAttempts = 0
+    private val scope = CoroutineScope(Dispatchers.IO)
 
-                if (validate != null) {
-                    editText.addTextChangedListener(
-                        object : TextWatcher {
-                            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-                            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-
-                            override fun afterTextChanged(editable: Editable?) {
-                                requireNotNull(editable)
-
-                                val text = editable.toString()
-
-                                val isValid = text.isBlank() || validate(text)
-
-                                editText.error = if (!isValid) validationMessage else null
-                                editText.rootView.findViewById<Button>(android.R.id.button1)
-                                    ?.isEnabled = editText.error == null
-                            }
-                        },
-                    )
-                }
-            }
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(this.key, newValue as String).commit()
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
+    private fun fetchFilterOptions() {
+        if (baseUrl.isBlank() || fetchFilterStatus != FetchFilterStatus.NOT_FETCHED || fetchFiltersAttempts >= 3) {
+            return
         }
 
-        addPreference(preference)
-    }
+        fetchFilterStatus = FetchFilterStatus.FETCHING
+        fetchFiltersAttempts++
 
-    private val SharedPreferences.displayName
-        get() = getString(PREF_DISPLAYNAME, "")!!
-
-    private val SharedPreferences.baseUrl
-        get() = getString(PREF_ADDRESS, ADDRESS_DEFAULT)!!.removeSuffix("/")
-
-    private val SharedPreferences.username
-        get() = getString(PREF_USERNAME, USERNAME_DEFAULT)!!
-
-    private val SharedPreferences.password
-        get() = getString(PREF_PASSWORD, PASSWORD_DEFAULT)!!
-
-    init {
-        if (baseUrl.isNotBlank()) {
-            Single.fromCallable {
-                try {
-                    client.newCall(GET("$baseUrl/api/v1/libraries", headers)).execute().use { response ->
-                        libraries = try {
-                            val responseBody = response.body
-                            responseBody.use { json.decodeFromString(it.string()) }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "error while decoding JSON for libraries filter", e)
-                            emptyList()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(LOG_TAG, "error while loading libraries for filters", e)
-                }
-
-                try {
-                    client.newCall(GET("$baseUrl/api/v1/collections?unpaged=true", headers)).execute().use { response ->
-                        collections = try {
-                            val responseBody = response.body
-                            responseBody.use { json.decodeFromString<PageWrapperDto<CollectionDto>>(it.string()).content }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "error while decoding JSON for collections filter", e)
-                            emptyList()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(LOG_TAG, "error while loading collections for filters", e)
-                }
-
-                try {
-                    client.newCall(GET("$baseUrl/api/v1/genres", headers)).execute().use { response ->
-                        genres = try {
-                            val responseBody = response.body
-                            responseBody.use { json.decodeFromString(it.string()) }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "error while decoding JSON for genres filter", e)
-                            emptySet()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(LOG_TAG, "error while loading genres for filters", e)
-                }
-
-                try {
-                    client.newCall(GET("$baseUrl/api/v1/tags", headers)).execute().use { response ->
-                        tags = try {
-                            response.body.use { json.decodeFromString(it.string()) }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "error while decoding JSON for tags filter", e)
-                            emptySet()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(LOG_TAG, "error while loading tags for filters", e)
-                }
-
-                try {
-                    client.newCall(GET("$baseUrl/api/v1/publishers", headers)).execute().use { response ->
-                        publishers = try {
-                            response.body.use { json.decodeFromString(it.string()) }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "error while decoding JSON for publishers filter", e)
-                            emptySet()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(LOG_TAG, "error while loading publishers for filters", e)
-                }
-
-                try {
-                    client.newCall(GET("$baseUrl/api/v1/authors", headers)).execute().use { response ->
-                        authors = try {
-                            response.body
-                                .use { json.decodeFromString<List<AuthorDto>>(it.string()) }
-                                .groupBy { it.role }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "error while decoding JSON for authors filter", e)
-                            emptyMap()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(LOG_TAG, "error while loading authors for filters", e)
-                }
+        scope.launch {
+            try {
+                libraries = client.newCall(GET("$baseUrl/api/v1/libraries")).await().parseAs()
+                collections = client
+                    .newCall(GET("$baseUrl/api/v1/collections?unpaged=true"))
+                    .await()
+                    .parseAs<PageWrapperDto<CollectionDto>>()
+                    .content
+                genres = client.newCall(GET("$baseUrl/api/v1/genres")).await().parseAs()
+                tags = client.newCall(GET("$baseUrl/api/v1/tags")).await().parseAs()
+                publishers = client.newCall(GET("$baseUrl/api/v1/publishers")).await().parseAs()
+                authors = client
+                    .newCall(GET("$baseUrl/api/v1/authors"))
+                    .await()
+                    .parseAs<List<AuthorDto>>()
+                    .groupBy { it.role }
+                fetchFilterStatus = FetchFilterStatus.FETCHED
+            } catch (e: Exception) {
+                fetchFilterStatus = FetchFilterStatus.NOT_FETCHED
+                Log.e(logTag, "Failed to fetch filtering options", e)
             }
-                .subscribeOn(Schedulers.io())
-                .observeOn(Schedulers.io())
-                .subscribe(
-                    {},
-                    { tr ->
-                        Log.e(LOG_TAG, "error while doing initial calls", tr)
-                    },
-                )
         }
     }
+
+    fun Response.isFromReadList() = request.url.toString().contains("/api/v1/readlists")
+
+    private inline fun <reified T> Response.parseAs(): T =
+        json.decodeFromString(body.string())
+
+    private val logTag by lazy { "komga${if (suffix.isNotBlank()) ".$suffix" else ""}" }
 
     companion object {
-        private const val PREF_DISPLAYNAME = "Source display name"
-        private const val PREF_ADDRESS = "Address"
-        private const val ADDRESS_DEFAULT = ""
-        private const val PREF_USERNAME = "Username"
-        private const val USERNAME_DEFAULT = ""
-        private const val PREF_PASSWORD = "Password"
-        private const val PASSWORD_DEFAULT = ""
+        internal const val PREF_EXTRA_SOURCES_COUNT = "Number of extra sources"
+        internal const val PREF_EXTRA_SOURCES_DEFAULT = "2"
 
-        private val supportedImageTypes = listOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/jxl", "image/heif", "image/avif")
-
-        private const val TYPE_SERIES = "Series"
-        private const val TYPE_READLISTS = "Read lists"
+        internal const val TYPE_SERIES = "Series"
+        internal const val TYPE_READLISTS = "Read lists"
     }
 }
+
+private enum class FetchFilterStatus {
+    NOT_FETCHED,
+    FETCHING,
+    FETCHED,
+}
+
+private val PREF_EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
+
+private const val PREF_DISPLAY_NAME = "Source display name"
+private const val PREF_ADDRESS = "Address"
+private const val PREF_USERNAME = "Username"
+private const val PREF_PASSWORD = "Password"
+private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
+private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
+private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
+
+private val SUPPORTED_IMAGE_TYPES = listOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/jxl", "image/heif", "image/avif")

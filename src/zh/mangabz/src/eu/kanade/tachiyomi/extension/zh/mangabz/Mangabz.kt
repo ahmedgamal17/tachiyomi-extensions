@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import android.app.Application
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.unpacker.SubstringExtractor
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
@@ -13,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -26,7 +28,7 @@ import uy.kohesive.injekt.api.get
 
 class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
-    override val baseUrl: String
+    private val _baseUrl: String
     override val client: OkHttpClient
 
     private val urlSuffix: String
@@ -34,15 +36,25 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     init {
         val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
         val mirror = preferences.mirror
-        baseUrl = "https://" + mirror.domain
+        _baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix
 
-        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie, preferences.lang)
+        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
         client = network.client.newBuilder()
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
             .build()
     }
+
+    private val isCi = System.getenv("CI") == "true"
+    override val baseUrl get() = when {
+        isCi -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
+        else -> _baseUrl
+    }
+
+    override fun headersBuilder() = Headers.Builder()
+        .add("Referer", _baseUrl)
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 
     private fun SManga.stripMirror() = apply {
         val old = url

@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'MangaKatana'
-    pkgNameSuffix = 'en.mangakatana'
     extClass = '.MangaKatana'
     extVersionCode = 10
 }

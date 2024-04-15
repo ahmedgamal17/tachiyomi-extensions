@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Hennojin'
-    pkgNameSuffix = 'all.hennojin'
     extClass = '.HennojinFactory'
     extVersionCode = 1
     isNsfw = true

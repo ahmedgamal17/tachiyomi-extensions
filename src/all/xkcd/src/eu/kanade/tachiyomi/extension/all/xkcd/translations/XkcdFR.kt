@@ -42,5 +42,9 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
         }
 
     override val interactiveText: String
+<<<<<<< HEAD
         get() = throw UnsupportedOperationException("Not used")
+=======
+        get() = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 }

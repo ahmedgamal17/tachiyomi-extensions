@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Rmanga.app'
-    pkgNameSuffix = 'en.rmanga'
     extClass = '.Rmanga'
     extVersionCode = 2
 }

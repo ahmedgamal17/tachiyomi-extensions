@@ -1,11 +1,9 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'LectorManga'
-    pkgNameSuffix = 'es.lectormanga'
     extClass = '.LectorManga'
-    extVersionCode = 31
+    themePkg = 'lectortmo'
+    baseUrl = 'https://lectormanga.com'
+    overrideVersionCode = 34
     isNsfw = true
 }
 

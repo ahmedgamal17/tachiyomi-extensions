@@ -26,7 +26,7 @@ class ReadM : ParsedHttpSource() {
 
     // Info
     override val name: String = "ReadM"
-    override val baseUrl: String = "https://readm.org"
+    override val baseUrl: String = "https://readm.today"
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -77,9 +77,9 @@ class ReadM : ParsedHttpSource() {
         return POST("$baseUrl/service/search", searchHeaders, formBody.build())
     }
 
-    override fun searchMangaNextPageSelector(): String = throw Exception("Not used")
-    override fun searchMangaSelector(): String = throw Exception("Not used")
-    override fun searchMangaFromElement(element: Element): SManga = throw Exception("Not used")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response) = json.parseToJsonElement(response.body.string()).jsonObject["manga"]?.jsonArray?.map {
         val obj = it.jsonObject
@@ -102,7 +102,7 @@ class ReadM : ParsedHttpSource() {
         status = parseStatus(document.select("div.series-genres .series-status").firstOrNull()?.ownText())
     }
 
-    protected fun parseStatus(element: String?): Int = when {
+    private fun parseStatus(element: String?): Int = when {
         element == null -> SManga.UNKNOWN
         listOf("ongoing").any { it.contains(element, ignoreCase = true) } -> SManga.ONGOING
         listOf("completed").any { it.contains(element, ignoreCase = true) } -> SManga.COMPLETED
@@ -154,7 +154,7 @@ class ReadM : ParsedHttpSource() {
 
     // Pages
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
     override fun pageListParse(document: Document): List<Page> = document.select("div.ch-images img").mapIndexed { index, element ->
         Page(index, "", element.imgAttr())
     }

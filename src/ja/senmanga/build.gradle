@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Sen Manga'
-    pkgNameSuffix = 'ja.senmanga'
     extClass = '.SenManga'
     extVersionCode = 6
 }

@@ -27,7 +27,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -146,13 +146,13 @@ open class NHentai(
             filterList.findInstance<OffsetPageFilter>()?.state?.toIntOrNull()?.plus(page) ?: page
 
         if (favoriteFilter?.state == true) {
-            val url = "$baseUrl/favorites".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/favorites".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "$fixedQuery $advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         } else {
-            val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "$fixedQuery $nhLangSearch$advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
@@ -162,7 +162,7 @@ open class NHentai(
                 }
             }
 
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         }
     }
 
@@ -247,9 +247,9 @@ open class NHentai(
         )
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
         val script = document.select("script:containsData(media_server)").first()!!.data()
@@ -294,7 +294,7 @@ open class NHentai(
 
     class OffsetPageFilter : Filter.Text("Offset results by # pages")
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only", false)
 
@@ -302,6 +302,7 @@ open class NHentai(
         "Sort By",
         arrayOf(
             Pair("Popular: All Time", "popular"),
+            Pair("Popular: Month", "popular-month"),
             Pair("Popular: Week", "popular-week"),
             Pair("Popular: Today", "popular-today"),
             Pair("Recent", "date"),

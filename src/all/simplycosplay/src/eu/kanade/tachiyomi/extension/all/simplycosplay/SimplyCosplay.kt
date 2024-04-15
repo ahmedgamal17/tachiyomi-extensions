@@ -375,8 +375,15 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response) =
+<<<<<<< HEAD
         throw UnsupportedOperationException("Not implemented")
 
     override fun imageUrlParse(response: Response) =
         throw UnsupportedOperationException("Not implemented")
+=======
+        throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response) =
+        throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 }

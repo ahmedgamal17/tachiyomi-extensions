@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'KomikIndoID'
-    pkgNameSuffix = 'id.komikindoid'
     extClass = '.KomikIndoID'
     extVersionCode = 13
 }

@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'MangaPlex'
-    pkgNameSuffix = 'en.mangaplex'
     extClass = '.MangaPlex'
     extVersionCode = 1
 }

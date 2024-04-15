@@ -1,15 +1,7 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Mangaku'
-    pkgNameSuffix = 'id.mangaku'
     extClass = '.Mangaku'
-    extVersionCode = 6
+    extVersionCode = 10
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib-cryptoaes'))
-}

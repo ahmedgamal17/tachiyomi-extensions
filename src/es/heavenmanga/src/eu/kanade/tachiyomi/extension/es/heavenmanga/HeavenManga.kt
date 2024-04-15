@@ -9,12 +9,24 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+<<<<<<< HEAD
 import okhttp3.Headers
+=======
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
+>>>>>>> remotes/keiyoushi/main
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+<<<<<<< HEAD
+=======
+import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
+>>>>>>> remotes/keiyoushi/main
 
 class HeavenManga : ParsedHttpSource() {
 
@@ -24,6 +36,7 @@ class HeavenManga : ParsedHttpSource() {
 
     override val lang = "es"
 
+<<<<<<< HEAD
     // latest is broken on the site, it's the same as popular so turning it off
     override val supportsLatest = false
 
@@ -99,6 +112,22 @@ class HeavenManga : ParsedHttpSource() {
 
     // get contents of a url
     private fun getUrlContents(url: String): Document = client.newCall(GET(url, headers)).execute().asJsoup()
+=======
+    override val supportsLatest = true
+
+    private val json: Json by injectLazy()
+
+    override val client: OkHttpClient = network.cloudflareClient
+
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/top?orderby=views&page=$page", headers)
+
+    override fun popularMangaSelector() = "div.page-item-detail"
+
+    override fun popularMangaNextPageSelector() = "ul.pagination a[rel=next]"
+>>>>>>> remotes/keiyoushi/main
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
@@ -108,6 +137,7 @@ class HeavenManga : ParsedHttpSource() {
         }
     }
 
+<<<<<<< HEAD
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         element.select("a").let {
             val latestChapter = getUrlContents(it.attr("href"))
@@ -118,6 +148,95 @@ class HeavenManga : ParsedHttpSource() {
         }
     }
 
+=======
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.selectFirst(latestUpdatesWrapperSelector())!!
+            .select(latestUpdatesSelector())
+            .map { element ->
+                latestUpdatesFromElement(element)
+            }.distinctBy { it.url }
+
+        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    private fun latestUpdatesWrapperSelector() = ".container #loop-content "
+
+    override fun latestUpdatesSelector() = "span.list-group-item:not(:has(> div.row:containsOwn(Novela)))"
+
+    override fun latestUpdatesNextPageSelector(): String? = null
+
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("a")!!) {
+            val mangaUrl = attr("href").substringBeforeLast("/")
+            setUrlWithoutDomain(mangaUrl)
+            title = select(".captitle").text()
+            thumbnail_url = mangaUrl.replace("/manga/", "/uploads/manga/") + "/cover/cover_250x350.jpg"
+        }
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            if (query.length < 3) throw Exception("La búsqueda debe tener al menos 3 caracteres")
+            url.addPathSegment("buscar")
+                .addQueryParameter("query", query)
+        } else {
+            val ext = ".html"
+            var name: String
+            filters.forEach { filter ->
+                when (filter) {
+                    is GenreFilter -> {
+                        if (filter.toUriPart().isNotBlank() && filter.state != 0) {
+                            name = filter.toUriPart()
+                            url.addPathSegment("genero")
+                                .addPathSegment(name + ext)
+                        }
+                    }
+                    is AlphabeticoFilter -> {
+                        if (filter.toUriPart().isNotBlank() && filter.state != 0) {
+                            name = filter.toUriPart()
+                            url.addPathSegment("letra")
+                                .addPathSegment("manga$ext")
+                                .addQueryParameter("alpha", name)
+                        }
+                    }
+                    is ListaCompletasFilter -> {
+                        if (filter.toUriPart().isNotBlank() && filter.state != 0) {
+                            name = filter.toUriPart()
+                            url.addPathSegment(name)
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }
+
+        if (page > 1) url.addQueryParameter("page", page.toString())
+
+        return GET(url.build(), headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        return if (response.request.url.pathSegments.contains("buscar")) {
+            super.searchMangaParse(response)
+        } else {
+            popularMangaParse(response)
+        }
+    }
+
+    override fun searchMangaSelector() = "div.c-tabs-item__content"
+
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+>>>>>>> remotes/keiyoushi/main
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         element.select("h4 a").let {
             title = it.text()
@@ -126,6 +245,7 @@ class HeavenManga : ParsedHttpSource() {
         thumbnail_url = element.select("img").attr("abs:data-src")
     }
 
+<<<<<<< HEAD
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             element.select("a").let {
@@ -136,6 +256,8 @@ class HeavenManga : ParsedHttpSource() {
         }
     }
 
+=======
+>>>>>>> remotes/keiyoushi/main
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.select("div.tab-summary").let { info ->
             genre = info.select("div.genres-content a").joinToString { it.text() }
@@ -144,6 +266,7 @@ class HeavenManga : ParsedHttpSource() {
         description = document.select("div.description-summary p").text()
     }
 
+<<<<<<< HEAD
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -165,6 +288,62 @@ class HeavenManga : ParsedHttpSource() {
         "Géneros",
         arrayOf(
             Pair("Todo", ""),
+=======
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaUrl = (baseUrl + manga.url).toHttpUrl().newBuilder()
+            .addQueryParameter("columns[0][data]", "number")
+            .addQueryParameter("columns[0][orderable]", "true")
+            .addQueryParameter("columns[1][data]", "created_at")
+            .addQueryParameter("columns[1][searchable]", "true")
+            .addQueryParameter("order[0][column]", "1")
+            .addQueryParameter("order[0][dir]", "desc")
+            .addQueryParameter("start", "0")
+            .addQueryParameter("length", CHAPTER_LIST_LIMIT.toString())
+
+        val headers = headersBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        return GET(mangaUrl.build(), headers)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val mangaUrl = response.request.url.toString().substringBefore("?").removeSuffix("/")
+        val result = json.decodeFromString<PayloadChaptersDto>(response.body.string())
+        return result.data.map {
+            SChapter.create().apply {
+                name = "Capítulo: ${it.slug}"
+                setUrlWithoutDomain("$mangaUrl/${it.slug}#${it.id}")
+                date_upload = runCatching { dateFormat.parse(it.createdAt)?.time ?: 0 }.getOrDefault(0)
+            }
+        }
+    }
+
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.substringAfterLast("#")
+        if (chapterId.isBlank()) throw Exception("Error al obtener el id del capítulo. Actualice la lista")
+        val url = "$baseUrl/manga/leer/$chapterId"
+        return GET(url, headers)
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        val data = document.select("script:containsData(pUrl)").first()!!.data()
+        val jsonString = PAGES_REGEX.find(data)!!.groupValues[1].removeTrailingComma()
+        val pages = json.decodeFromString<List<PageDto>>(jsonString)
+        return pages.mapIndexed { i, dto -> Page(i, "", dto.imgURL) }
+    }
+
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    private class GenreFilter : UriPartFilter(
+        "Géneros",
+        arrayOf(
+            Pair("<Seleccionar>", ""),
+>>>>>>> remotes/keiyoushi/main
             Pair("Accion", "accion"),
             Pair("Adulto", "adulto"),
             Pair("Aventura", "aventura"),
@@ -258,7 +437,12 @@ class HeavenManga : ParsedHttpSource() {
     private class AlphabeticoFilter : UriPartFilter(
         "Alfabético",
         arrayOf(
+<<<<<<< HEAD
             Pair("Todo", ""),
+=======
+            Pair("<Seleccionar>", ""),
+            Pair("Other", "Other"),
+>>>>>>> remotes/keiyoushi/main
             Pair("A", "a"),
             Pair("B", "b"),
             Pair("C", "c"),
@@ -296,7 +480,11 @@ class HeavenManga : ParsedHttpSource() {
     private class ListaCompletasFilter : UriPartFilter(
         "Lista Completa",
         arrayOf(
+<<<<<<< HEAD
             Pair("Todo", ""),
+=======
+            Pair("<Seleccionar>", ""),
+>>>>>>> remotes/keiyoushi/main
             Pair("Lista Comis", "comic"),
             Pair("Lista Novelas", "novela"),
             Pair("Lista Adulto", "adulto"),
@@ -317,4 +505,16 @@ class HeavenManga : ParsedHttpSource() {
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
+<<<<<<< HEAD
+=======
+
+    private fun String.removeTrailingComma() = replace(TRAILING_COMMA_REGEX, "$1")
+
+    companion object {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val PAGES_REGEX = """pUrl\s*=\s*(\[.*\])\s*;""".toRegex()
+        val TRAILING_COMMA_REGEX = """,\s*(\}|\])""".toRegex()
+        private const val CHAPTER_LIST_LIMIT = 10000
+    }
+>>>>>>> remotes/keiyoushi/main
 }

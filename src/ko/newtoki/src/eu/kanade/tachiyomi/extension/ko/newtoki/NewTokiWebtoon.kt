@@ -23,7 +23,7 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
                 }
 
                 is SearchSortTypeList -> {
-                    val state = filter.state ?: return@forEach
+                    val state = filter.state!!
                     url.addQueryParameter("sst", arrayOf("as_update", "wr_hit", "wr_good")[state.index])
                     url.addQueryParameter("sod", if (state.ascending) "asc" else "desc")
                 }
@@ -61,7 +61,7 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     private class SearchTargetTypeList : Filter.Select<String>("Type", arrayOf("전체", "일반웹툰", "성인웹툰", "BL/GL", "완결웹툰"))
@@ -132,6 +132,7 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
             "인기순",
             "추천순",
         ),
+        Selection(0, false),
     )
 
     override fun getFilterList() = FilterList(

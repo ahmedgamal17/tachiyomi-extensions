@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'FuryoSquad'
-    pkgNameSuffix = 'fr.furyosquad'
     extClass = '.FuryoSquad'
     extVersionCode = 3
 }

@@ -1,11 +1,7 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
-    extName =  'TeamX'
-    pkgNameSuffix = 'ar.teamx'
+    extName = 'Team X'
     extClass = '.TeamX'
-    extVersionCode = 15
+    extVersionCode = 17
     isNsfw = false
 }
 

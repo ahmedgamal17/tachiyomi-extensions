@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'oots'
-    pkgNameSuffix = 'en.oots'
     extClass = '.oots'
     extVersionCode = 2
 }

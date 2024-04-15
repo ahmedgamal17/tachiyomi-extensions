@@ -1,11 +1,9 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Rudra Scans'
-    pkgNameSuffix = 'en.rudrascans'
     extClass = '.RudraScans'
-    extVersionCode = 1
+    themePkg = 'keyoapp'
+    baseUrl = 'https://rudrascans.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

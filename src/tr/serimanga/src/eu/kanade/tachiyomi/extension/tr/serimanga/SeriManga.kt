@@ -17,7 +17,7 @@ import java.util.Locale
 class SeriManga : ParsedHttpSource() {
     override val name = "SeriManga"
 
-    override val baseUrl = "https://serimanga.com"
+    override val baseUrl = "https://serimangas.com"
 
     override val lang = "tr"
 
@@ -121,7 +121,7 @@ class SeriManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }

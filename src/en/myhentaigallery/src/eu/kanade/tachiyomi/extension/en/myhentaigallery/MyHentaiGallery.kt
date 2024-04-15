@@ -94,7 +94,7 @@ class MyHentaiGallery : ParsedHttpSource() {
             }
             url.addPathSegment("$page")
 
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         }
     }
 
@@ -134,9 +134,9 @@ class MyHentaiGallery : ParsedHttpSource() {
         )
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // Pages
 
@@ -146,7 +146,7 @@ class MyHentaiGallery : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 

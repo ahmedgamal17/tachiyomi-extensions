@@ -1,0 +1,9 @@
+ext {
+    extName = 'Umi Manga'
+    extClass = '.UmiManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.umimanga.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

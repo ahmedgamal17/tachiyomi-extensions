@@ -27,7 +27,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -110,7 +109,7 @@ open class BatoTo(
     override fun latestUpdatesSelector(): String {
         return when (siteLang) {
             "" -> "div#series-list div.col"
-            "en" -> "div#series-list div.col.no-flag"
+            "en,en_us" -> "div#series-list div.col.no-flag"
             else -> "div#series-list div.col:has([data-lang=\"$siteLang\"])"
         }
     }
@@ -160,13 +159,13 @@ open class BatoTo(
                         else -> { /* Do Nothing */ }
                     }
                 }
-                client.newCall(GET(url.build().toString(), headers)).asObservableSuccess()
+                client.newCall(GET(url.build(), headers)).asObservableSuccess()
                     .map { response ->
                         queryParse(response)
                     }
             }
             else -> {
-                val url = "$baseUrl/browse".toHttpUrlOrNull()!!.newBuilder()
+                val url = "$baseUrl/browse".toHttpUrl().newBuilder()
                 var min = ""
                 var max = ""
                 filters.forEach { filter ->
@@ -232,7 +231,7 @@ open class BatoTo(
                     url.addQueryParameter("chapters", "$min-$max")
                 }
 
-                client.newCall(GET(url.build().toString(), headers)).asObservableSuccess()
+                client.newCall(GET(url.build(), headers)).asObservableSuccess()
                     .map { response ->
                         queryParse(response)
                     }
@@ -299,10 +298,10 @@ open class BatoTo(
         add("prevPos", "null")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
@@ -457,11 +456,11 @@ open class BatoTo(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(imgHttpLis):containsData(batoWord):containsData(batoPass)")?.html()
+        val script = document.selectFirst("script:containsData(imgHttps):containsData(batoWord):containsData(batoPass)")?.html()
             ?: throw RuntimeException("Couldn't find script with image data.")
 
-        val imgHttpLisString = script.substringAfter("const imgHttpLis =").substringBefore(";").trim()
-        val imgHttpLis = json.parseToJsonElement(imgHttpLisString).jsonArray.map { it.jsonPrimitive.content }
+        val imgHttpsString = script.substringAfter("const imgHttps =").substringBefore(";").trim()
+        val imageUrls = json.parseToJsonElement(imgHttpsString).jsonArray.map { it.jsonPrimitive.content }
         val batoWord = script.substringAfter("const batoWord =").substringBefore(";").trim()
         val batoPass = script.substringAfter("const batoPass =").substringBefore(";").trim()
 
@@ -469,12 +468,19 @@ open class BatoTo(
         val imgAccListString = CryptoAES.decrypt(batoWord.removeSurrounding("\""), evaluatedPass)
         val imgAccList = json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
 
-        return imgHttpLis.zip(imgAccList).mapIndexed { i, (imgUrl, imgAcc) ->
-            Page(i, imageUrl = "$imgUrl?$imgAcc")
+        return imageUrls.mapIndexed { i, it ->
+            val acc = imgAccList.getOrNull(i)
+            val url = if (acc != null) {
+                "$it?$acc"
+            } else {
+                it
+            }
+
+            Page(i, imageUrl = url)
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun String.removeEntities(): String = Parser.unescapeEntities(this, true)
 

@@ -47,9 +47,15 @@ open class TaddyInk(
         }.also(screen::addPreference)
     }
 
+<<<<<<< HEAD
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used!")
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used!")
+=======
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/feeds/directory/list".toHttpUrl().newBuilder()

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Traducciones Moonlight'
+    extClass = '.TraduccionesMoonlight'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://traduccionesmoonlight.com'
+    overrideVersionCode = 8
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

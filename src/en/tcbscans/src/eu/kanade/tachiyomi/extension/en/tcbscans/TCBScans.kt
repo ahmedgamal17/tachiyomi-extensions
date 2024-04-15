@@ -22,7 +22,7 @@ import uy.kohesive.injekt.api.get
 class TCBScans : ParsedHttpSource() {
 
     override val name = "TCB Scans"
-    override val baseUrl = "https://onepiecechapters.com"
+    override val baseUrl = "https://tcbscans.com"
     override val lang = "en"
     override val supportsLatest = false
     override val client: OkHttpClient = network.cloudflareClient
@@ -86,7 +86,7 @@ class TCBScans : ParsedHttpSource() {
     }
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String = throw Exception("Not used")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = popularMangaSelector()
 

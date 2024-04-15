@@ -1,12 +1,9 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
-
 ext {
     extName = 'LikeManga'
-    pkgNameSuffix = 'en.likemanga'
-    extClass = '.LikeManga'
-    extVersionCode = 3
+    extClass = '.LikeMangaIO'
+    themePkg = 'likemanga'
+    baseUrl = 'https://likemanga.io'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

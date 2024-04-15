@@ -1,9 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'MangaPoisk'
-    pkgNameSuffix = 'ru.mangapoisk'
     extClass = '.MangaPoisk'
     extVersionCode = 10
     isNsfw = true

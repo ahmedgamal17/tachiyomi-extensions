@@ -33,7 +33,7 @@ import java.util.Calendar
 
 class NineHentai : HttpSource() {
 
-    override val baseUrl = "https://9hentai.to"
+    override val baseUrl = "https://9hentai.com"
 
     override val name = "NineHentai"
 
@@ -359,7 +359,7 @@ class NineHentai : HttpSource() {
         CategoryFilter(),
     )
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not Used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private val Request.bodyString: String
         get() {

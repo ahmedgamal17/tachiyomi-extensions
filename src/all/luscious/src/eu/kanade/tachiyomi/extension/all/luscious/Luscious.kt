@@ -29,7 +29,7 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -206,7 +206,7 @@ abstract class Luscious(
 
     private fun buildAlbumListRequest(page: Int, filters: FilterList, query: String = ""): Request {
         val input = buildAlbumListRequestInput(page, filters, query)
-        val url = apiBaseUrl.toHttpUrlOrNull()!!.newBuilder()
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumList")
             .addQueryParameter("query", ALBUM_LIST_REQUEST_GQL)
             .addQueryParameter("variables", input.toString())
@@ -238,7 +238,7 @@ abstract class Luscious(
 
     private fun buildAlbumInfoRequest(id: String): Request {
         val input = buildAlbumInfoRequestInput(id)
-        val url = apiBaseUrl.toHttpUrlOrNull()!!.newBuilder()
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumGet")
             .addQueryParameter("query", albumInfoQuery)
             .addQueryParameter("variables", input.toString())
@@ -314,7 +314,7 @@ abstract class Luscious(
         return chapters.reversed()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // Pages
 
@@ -337,7 +337,7 @@ abstract class Luscious(
 
     private fun buildAlbumPicturesPageUrl(id: String, page: Int): String {
         val input = buildAlbumPicturesRequestInput(id, page)
-        return apiBaseUrl.toHttpUrlOrNull()!!.newBuilder()
+        return apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumListOwnPictures")
             .addQueryParameter("query", ALBUM_PICTURES_REQUEST_GQL)
             .addQueryParameter("variables", input.toString())
@@ -394,9 +394,9 @@ abstract class Luscious(
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun fetchImageUrl(page: Page): Observable<String> {
         if (page.imageUrl != null) {
@@ -461,7 +461,7 @@ abstract class Luscious(
             return manga
         }
     }
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Popular
 

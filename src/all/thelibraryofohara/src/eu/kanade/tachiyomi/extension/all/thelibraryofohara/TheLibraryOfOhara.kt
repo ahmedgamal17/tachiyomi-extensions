@@ -66,7 +66,11 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
 
+<<<<<<< HEAD
     override fun latestUpdatesFromElement(element: Element): SManga = throw Exception("This method should not be called!")
+=======
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
@@ -86,11 +90,19 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
         return MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
     }
 
+<<<<<<< HEAD
     override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
 
     override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+=======
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     // Details
 
@@ -210,5 +222,9 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
         return pages
     }
 
+<<<<<<< HEAD
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+=======
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 }

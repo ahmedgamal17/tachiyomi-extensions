@@ -67,11 +67,16 @@ class YaoiMangaOnline : ParsedHttpSource() {
         SManga.create().apply {
             title = element.attr("title")
             setUrlWithoutDomain(element.attr("href"))
+<<<<<<< HEAD
             thumbnail_url = element.selectFirst("img")!!.attr("src")
+=======
+            thumbnail_url = element.selectFirst("img")?.attr("src")
+>>>>>>> remotes/keiyoushi/main
         }
 
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
+<<<<<<< HEAD
             title = document.selectFirst(".entry-title")!!.text()
             thumbnail_url = document.head()
                 .selectFirst("meta[property=og:image]")!!.attr("content")
@@ -87,6 +92,22 @@ class YaoiMangaOnline : ParsedHttpSource() {
             name = element.selectFirst(".acp_title")!!.text()
             setUrlWithoutDomain(
                 element.selectFirst("a")?.attr("href") ?: element.baseUri(),
+=======
+            title = document.select("h1.entry-title").text()
+            thumbnail_url = document
+                .selectFirst(".herald-post-thumbnail img")?.attr("src")
+            description = document.select(".entry-content > p").text()
+            genre = document.select(".meta-tags > a").joinToString { it.text() }
+        }
+
+    override fun chapterListSelector() = ".mpp-toc a"
+
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            name = element.ownText()
+            setUrlWithoutDomain(
+                element.attr("href") ?: element.baseUri(),
+>>>>>>> remotes/keiyoushi/main
             )
         }
 
@@ -96,15 +117,26 @@ class YaoiMangaOnline : ParsedHttpSource() {
                 name = "Chapter"
                 url = response.request.url.encodedPath
             }.let(::listOf)
+<<<<<<< HEAD
         }
 
     override fun pageListParse(document: Document) =
         document.select(".size-full").mapIndexed { idx, img ->
+=======
+        }.reversed()
+
+    override fun pageListParse(document: Document) =
+        document.select(".entry-content img").mapIndexed { idx, img ->
+>>>>>>> remotes/keiyoushi/main
             Page(idx, "", img.attr("src"))
         }
 
     override fun imageUrlParse(document: Document) =
+<<<<<<< HEAD
         throw UnsupportedOperationException("Not used")
+=======
+        throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun getFilterList() =
         FilterList(CategoryFilter(), TagFilter())

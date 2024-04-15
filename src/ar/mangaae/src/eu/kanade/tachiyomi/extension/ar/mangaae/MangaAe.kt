@@ -136,7 +136,11 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
+<<<<<<< HEAD
     override fun imageUrlParse(document: Document): String = throw Exception("Not used")
+=======
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     // ============================== Filters ===============================
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
@@ -161,7 +165,11 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
         private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
+<<<<<<< HEAD
         private const val BASE_URL_PREF_DEFAULT = "https://manga.ae"
+=======
+        private const val BASE_URL_PREF_DEFAULT = "https://mangaae.com"
+>>>>>>> remotes/keiyoushi/main
         private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
         private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
     }
@@ -173,6 +181,10 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
             summary = BASE_URL_PREF_SUMMARY
             setDefaultValue(BASE_URL_PREF_DEFAULT)
             dialogTitle = BASE_URL_PREF_TITLE
+<<<<<<< HEAD
+=======
+            dialogMessage = "Default: $BASE_URL_PREF_DEFAULT"
+>>>>>>> remotes/keiyoushi/main
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()

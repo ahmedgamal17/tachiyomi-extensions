@@ -110,11 +110,11 @@ class LerManga : ParsedHttpSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
@@ -135,7 +135,7 @@ class LerManga : ParsedHttpSource() {
         return response.parseAs<List<LmMangaDto>>().first().toSManga()
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
     override fun chapterListSelector() = "div.manga-chapters div.single-chapter"
 
@@ -162,12 +162,13 @@ class LerManga : ParsedHttpSource() {
             .replace(PAGES_VARIABLE_REGEX, "")
             .substringBeforeLast(";")
             .let { json.decodeFromString<List<String>>(it) }
+            .filter { it.isNotBlank() }
             .mapIndexed { index, imageUrl ->
-                Page(index, document.location(), imageUrl)
+                Page(index, imageUrl = imageUrl)
             }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()

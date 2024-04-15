@@ -6,6 +6,7 @@ import android.net.Uri
 import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
+import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -79,6 +80,17 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         val archive = json.decodeFromString<Archive>(response.body.string())
 
         return archiveToSManga(archive)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val namespace = preferences.getString(URL_TAG_PREFIX_KEY, URL_TAG_PREFIX_DEFAULT)
+
+        if (namespace.isNullOrEmpty()) {
+            return super.getMangaUrl(manga)
+        }
+
+        val tag = manga.genre?.split(", ")?.find { it.startsWith("$namespace") }
+        return tag?.substringAfter("$namespace") ?: super.getMangaUrl(manga)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -272,7 +284,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
     }
 
-    private val preferences: SharedPreferences by lazy {
+    internal val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
@@ -282,12 +294,34 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
     private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, suffix)!!.ifBlank { suffix }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+        if (suffix == "1") {
+            ListPreference(screen.context).apply {
+                key = EXTRA_SOURCES_COUNT_KEY
+                title = "Number of extra sources"
+                summary = "Number of additional sources to create. There will always be at least one LANraragi source."
+                entries = EXTRA_SOURCES_ENTRIES
+                entryValues = EXTRA_SOURCES_ENTRIES
+
+                setDefaultValue(EXTRA_SOURCES_COUNT_DEFAULT)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putString(EXTRA_SOURCES_COUNT_KEY, newValue as String).commit()
+                        Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
+                }
+            }.also(screen::addPreference)
+        }
         screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
         screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required if No-Fun Mode is enabled.", true))
         screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
         screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
         screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added."))
+        screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
     }
 
     private fun androidx.preference.PreferenceScreen.checkBoxPreference(key: String, title: String, default: Boolean, summary: String = ""): androidx.preference.CheckBoxPreference {
@@ -458,6 +492,10 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
     }
 
     companion object {
+        internal const val EXTRA_SOURCES_COUNT_KEY = "extraSourcesCount"
+        internal const val EXTRA_SOURCES_COUNT_DEFAULT = "2"
+        private val EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
+
         private const val HOSTNAME_DEFAULT = "http://127.0.0.1:3000"
         private const val HOSTNAME_KEY = "hostname"
         private const val APIKEY_KEY = "apiKey"
@@ -468,5 +506,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         private const val SORT_BY_NS_KEY = "latestNamespacePref"
         private const val CLEAR_NEW_KEY = "clearNew"
         private const val CLEAR_NEW_DEFAULT = true
+        private const val URL_TAG_PREFIX_KEY = "urlTagPrefix"
+        private const val URL_TAG_PREFIX_DEFAULT = ""
     }
 }

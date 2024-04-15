@@ -64,13 +64,13 @@ class MangaSect : ParsedHttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun latestUpdatesSelector(): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesFromElement(element: Element): SManga =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesNextPageSelector(): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     // Search
 
@@ -111,19 +111,19 @@ class MangaSect : ParsedHttpSource() {
             addPathSegment("")
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaSelector(): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaNextPageSelector(): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     // Filters
 

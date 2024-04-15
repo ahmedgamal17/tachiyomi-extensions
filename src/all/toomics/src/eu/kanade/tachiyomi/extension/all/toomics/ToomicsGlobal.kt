@@ -145,7 +145,11 @@ abstract class ToomicsGlobal(
             .mapIndexed { i, el -> Page(i, url, el.attr("data-src")) }
     }
 
+<<<<<<< HEAD
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+=======
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+>>>>>>> remotes/keiyoushi/main
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headers.newBuilder()

@@ -44,7 +44,7 @@ open class NineNineNineHentai(
 
     override val baseUrl = "https://999hentai.net"
 
-    private val apiUrl = "https://api.999hentai.net/api"
+    private val apiUrl = "https://hapi.999hentai.net/api"
 
     override val supportsLatest = true
 
@@ -312,8 +312,8 @@ open class NineNineNineHentai(
 
     private val SharedPreferences.shortTitle get() = getBoolean(PREF_SHORT_TITLE, false)
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("Not Used")
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not Used")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val size = 20
